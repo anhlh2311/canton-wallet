@@ -1,0 +1,119 @@
+import { useState } from 'react';
+import { useCreateKeypair, useValidateImportKey } from '../../hooks/useWallet';
+import { KeyRoundIcon, ImportIcon, ArrowLeftIcon, Loader2Icon } from 'lucide-react';
+
+interface Props {
+  onNext: (data: { privateKey: string; publicKey: string; isImport: boolean }) => void;
+  onBack: () => void;
+}
+
+export function KeySetup({ onNext, onBack }: Props) {
+  const [mode, setMode] = useState<'choose' | 'import'>('choose');
+  const [importKey, setImportKey] = useState('');
+  const [error, setError] = useState('');
+
+  const createKeypair = useCreateKeypair();
+  const validateImport = useValidateImportKey();
+
+  const handleCreate = async () => {
+    setError('');
+    try {
+      const data = await createKeypair.mutateAsync();
+      onNext({ ...data, isImport: false });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Key generation failed');
+    }
+  };
+
+  const handleImport = async () => {
+    setError('');
+    if (!importKey.trim()) {
+      setError('Please enter your private key');
+      return;
+    }
+    try {
+      const data = await validateImport.mutateAsync(importKey.trim());
+      onNext({ ...data, isImport: true });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Invalid private key');
+    }
+  };
+
+  const isLoading = createKeypair.isPending || validateImport.isPending;
+
+  if (mode === 'import') {
+    return (
+      <div className="flex flex-col h-full p-6 bg-background">
+        <button onClick={() => setMode('choose')} className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
+          <ArrowLeftIcon className="w-4 h-4" /> Back
+        </button>
+
+        <h1 className="text-xl font-bold text-foreground mb-2">Import Key</h1>
+        <p className="text-sm text-muted-foreground mb-6">
+          Paste your existing Canton private key (Base64 or Hex).
+        </p>
+
+        <textarea
+          value={importKey}
+          onChange={(e) => setImportKey(e.target.value)}
+          className="w-full flex-1 rounded-lg bg-secondary text-foreground p-4 text-sm font-mono outline-none focus:ring-2 focus:ring-primary resize-none"
+          placeholder="Paste private key here..."
+        />
+
+        {error && <p className="text-xs text-destructive mt-2">{error}</p>}
+
+        <button
+          onClick={handleImport}
+          disabled={isLoading}
+          className="w-full mt-4 rounded-xl bg-primary text-primary-foreground py-3 font-medium disabled:opacity-40"
+        >
+          {isLoading ? <Loader2Icon className="w-5 h-5 animate-spin mx-auto" /> : 'Import & Continue'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full p-6 bg-background">
+      <button onClick={onBack} className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
+        <ArrowLeftIcon className="w-4 h-4" /> Back
+      </button>
+
+      <h1 className="text-xl font-bold text-foreground mb-2">Key Setup</h1>
+      <p className="text-sm text-muted-foreground mb-8">
+        Create a new key pair or import an existing one.
+      </p>
+
+      <div className="space-y-4 flex-1">
+        <button
+          onClick={handleCreate}
+          disabled={isLoading}
+          className="w-full flex items-center gap-4 rounded-xl bg-secondary p-4 hover:bg-accent transition-colors text-left"
+        >
+          <div className="rounded-lg bg-primary/20 p-3">
+            <KeyRoundIcon className="w-6 h-6 text-primary" />
+          </div>
+          <div>
+            <p className="font-medium text-foreground">Create New Key</p>
+            <p className="text-xs text-muted-foreground">Generate a fresh key pair</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setMode('import')}
+          className="w-full flex items-center gap-4 rounded-xl bg-secondary p-4 hover:bg-accent transition-colors text-left"
+        >
+          <div className="rounded-lg bg-primary/20 p-3">
+            <ImportIcon className="w-6 h-6 text-primary" />
+          </div>
+          <div>
+            <p className="font-medium text-foreground">Import Existing Key</p>
+            <p className="text-xs text-muted-foreground">Use your existing private key</p>
+          </div>
+        </button>
+      </div>
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}

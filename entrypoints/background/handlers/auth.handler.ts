@@ -1,0 +1,176 @@
+import { ok, err } from '@lib/messaging';
+import type { MessageResponse, AuthStateData, GoogleAuthData } from '@lib/messaging';
+import { localStore } from '@lib/storage';
+import { sessionStore } from '@lib/storage';
+import apiClient from '../api-client';
+
+// --- PKCE helpers ---
+
+/** Generate a random code_verifier (43–128 URL-safe chars). */
+function generateCodeVerifier(): string {
+  const buf = new Uint8Array(32);
+  crypto.getRandomValues(buf);
+  return base64UrlEncode(buf);
+}
+
+/** SHA-256 hash the verifier, then base64-url-encode the result. */
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  const data = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// --- Auth handler ---
+
+export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData>> {
+  try {
+    const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET;
+    if (!GOOGLE_CLIENT_ID) return err('VITE_GOOGLE_CLIENT_ID is not configured');
+    if (!GOOGLE_CLIENT_SECRET) return err('VITE_GOOGLE_CLIENT_SECRET is not configured');
+
+    const redirectUri = chrome.identity.getRedirectURL();
+    console.log('[Canton Wallet] OAuth redirect URI:', redirectUri);
+
+    // PKCE: generate verifier + challenge
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+    // Step 1: Authorization code + PKCE via launchWebAuthFlow
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('scope', 'openid email profile');
+    authUrl.searchParams.set('code_challenge', codeChallenge);
+    authUrl.searchParams.set('code_challenge_method', 'S256');
+    authUrl.searchParams.set('access_type', 'offline');
+    authUrl.searchParams.set('prompt', 'consent');
+
+    const responseUrl = await chrome.identity.launchWebAuthFlow({
+      url: authUrl.toString(),
+      interactive: true,
+    });
+
+    if (!responseUrl) return err('Auth cancelled');
+
+    // Extract authorization code from redirect URL
+    const url = new URL(responseUrl);
+    const code = url.searchParams.get('code');
+    if (!code) return err('No authorization code in response');
+
+    // Step 2: Exchange code for tokens (client_secret required for "Web application" type)
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        code,
+        code_verifier: codeVerifier,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      const errBody = await tokenRes.text();
+      console.error('[Canton Wallet] Token exchange failed:', errBody);
+      return err('Token exchange failed');
+    }
+
+    const tokenData = await tokenRes.json();
+    const idToken: string | undefined = tokenData.id_token;
+    if (!idToken) return err('No ID token from Google token exchange');
+
+    // Step 3: Send Google ID Token to backend (same credential format as the web app)
+    const { data: loginData } = await apiClient.post('/auth/login-with-google', {
+      credential: idToken,
+    });
+
+    const { token, refreshToken, user } = loginData.data;
+
+    // Store auth tokens in session
+    await sessionStore.setMany({
+      authToken: token,
+      refreshToken,
+    });
+
+    // Store user in local storage
+    await localStore.set('user', user);
+
+    // Fetch party info
+    const { data: meData } = await apiClient.get('/auth/me');
+    const { party } = meData.data;
+    const partyId = party?.partyId ?? null;
+    const partyStatus = party?.onboardingStatus ?? 'PENDING';
+    const publicKey = party?.publicKey ?? '';
+
+    if (partyId) {
+      await sessionStore.set('partyId', partyId);
+    }
+    await sessionStore.set('partyStatus', partyStatus);
+
+    return ok({
+      token,
+      user,
+      partyId: partyId ?? '',
+      partyStatus,
+      publicKey,
+    });
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Google auth failed');
+  }
+}
+
+export async function handleGetAuthState(): Promise<MessageResponse<AuthStateData>> {
+  try {
+    const token = await sessionStore.get('authToken');
+    const user = await localStore.get('user');
+    const partyId = await sessionStore.get('partyId');
+
+    return ok({
+      isAuthenticated: !!token,
+      user,
+      partyId,
+    });
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Failed to get auth state');
+  }
+}
+
+export async function handleRefreshToken(): Promise<MessageResponse<{ token: string }>> {
+  try {
+    const refreshToken = await sessionStore.get('refreshToken');
+    if (!refreshToken) return err('No refresh token');
+
+    const { data } = await apiClient.post('/auth/refresh-token', { refreshToken });
+    const newToken = data?.data?.token;
+    const newRefresh = data?.data?.refreshToken;
+
+    await sessionStore.setMany({
+      authToken: newToken,
+      refreshToken: newRefresh ?? refreshToken,
+    });
+
+    return ok({ token: newToken });
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Token refresh failed');
+  }
+}
+
+export async function handleLogout(): Promise<MessageResponse<void>> {
+  try {
+    await sessionStore.clear();
+    await localStore.set('user', null);
+    return ok(undefined);
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Logout failed');
+  }
+}

@@ -1,0 +1,157 @@
+import { useState } from 'react';
+import { Loader2Icon, CheckIcon, XIcon } from 'lucide-react';
+import { useIncomingOffers, usePrepareApprove, usePrepareReject, useSignAndSubmitApprove, useSignAndSubmitReject } from '../../../hooks/useOffers';
+import { format } from '@lib/format';
+import type { PrepareTransferTokenStandardResponse } from '@lib/types';
+import BigNumber from 'bignumber.js';
+
+export function IncomingTab() {
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useIncomingOffers({ page, limit: 5 });
+
+  const prepareApprove = usePrepareApprove();
+  const prepareReject = usePrepareReject();
+  const signApprove = useSignAndSubmitApprove();
+  const signReject = useSignAndSubmitReject();
+
+  const [activeContract, setActiveContract] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
+  const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | null>(null);
+  const [preparedData, setPreparedData] = useState<PrepareTransferTokenStandardResponse | null>(null);
+  const [error, setError] = useState('');
+
+  const handlePrepare = async (contractId: string, tokenId: string, action: 'approve' | 'reject') => {
+    setError('');
+    setActiveContract(contractId);
+    setPendingAction(action);
+    try {
+      const fn = action === 'approve' ? prepareApprove : prepareReject;
+      const result = await fn.mutateAsync({ contractId, tokenId });
+      setPreparedData(result.preparedData as PrepareTransferTokenStandardResponse);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Prepare failed');
+      setActiveContract(null);
+      setPendingAction(null);
+    }
+  };
+
+  const handleSign = async () => {
+    if (!preparedData || !password) return;
+    setError('');
+    try {
+      const fn = pendingAction === 'approve' ? signApprove : signReject;
+      await fn.mutateAsync({ password, preparedData });
+      setActiveContract(null);
+      setPreparedData(null);
+      setPassword('');
+      setPendingAction(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Sign failed');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-32">
+        <Loader2Icon className="w-5 h-5 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const items = data?.data ?? [];
+
+  if (items.length === 0) {
+    return <div className="text-center text-sm text-muted-foreground py-8">No incoming offers</div>;
+  }
+
+  return (
+    <div className="p-3 space-y-3">
+      {items.map((item) => (
+        <div key={item.contractId} className="rounded-xl bg-secondary p-3 space-y-2">
+          <div className="flex justify-between items-center">
+            <p className="text-sm font-medium text-foreground">
+              {new BigNumber(item.amount).toFormat()} {item.tokenName}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {item.createdAt ? format.date(new Date(item.createdAt)) : ''}
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            From: {format.truncatePartyId(item.sender, 5)}
+          </p>
+
+          {activeContract === item.contractId && preparedData ? (
+            <div className="space-y-2 pt-2 border-t border-border">
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-lg bg-background text-foreground px-3 py-2 text-sm outline-none"
+                placeholder="Enter password to sign"
+              />
+              {error && <p className="text-xs text-destructive">{error}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setActiveContract(null); setPreparedData(null); setPassword(''); }}
+                  className="flex-1 rounded-lg bg-background text-foreground py-2 text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSign}
+                  disabled={!password || signApprove.isPending || signReject.isPending}
+                  className="flex-1 rounded-lg bg-primary text-primary-foreground py-2 text-xs disabled:opacity-40"
+                >
+                  {(signApprove.isPending || signReject.isPending) ? (
+                    <Loader2Icon className="w-4 h-4 animate-spin mx-auto" />
+                  ) : (
+                    `Confirm ${pendingAction === 'approve' ? 'Approve' : 'Reject'}`
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => handlePrepare(item.contractId, item.instrumentId?.id ?? '', 'reject')}
+                disabled={prepareReject.isPending}
+                className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-destructive/20 text-destructive py-2 text-xs font-medium"
+              >
+                <XIcon className="w-3.5 h-3.5" /> Reject
+              </button>
+              <button
+                onClick={() => handlePrepare(item.contractId, item.instrumentId?.id ?? '', 'approve')}
+                disabled={prepareApprove.isPending}
+                className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-green-600 text-white py-2 text-xs font-medium"
+              >
+                <CheckIcon className="w-3.5 h-3.5" /> Approve
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {data && data.totalPages > 1 && (
+        <div className="flex justify-center gap-2 pt-2">
+          <button
+            disabled={!data.has_previous}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            className="px-3 py-1 rounded text-xs bg-secondary text-foreground disabled:opacity-30"
+          >
+            Prev
+          </button>
+          <span className="text-xs text-muted-foreground py-1">
+            {data.page} / {data.totalPages}
+          </span>
+          <button
+            disabled={!data.has_next}
+            onClick={() => setPage((p) => p + 1)}
+            className="px-3 py-1 rounded text-xs bg-secondary text-foreground disabled:opacity-30"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
