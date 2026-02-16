@@ -1,6 +1,6 @@
 import { sendMessage, MSG } from '@lib/messaging';
-import type { KeyPairData } from '@lib/messaging';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { KeyPairData, OnboardingPrepareData, PreapprovalStatusData } from '@lib/messaging';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 export function useCreateKeypair() {
   return useMutation({
@@ -11,10 +11,20 @@ export function useCreateKeypair() {
 
 export function useValidateImportKey() {
   return useMutation({
-    mutationFn: (privateKey: string) =>
+    mutationFn: (params: { privateKey: string; expectedPublicKey?: string }) =>
       sendMessage<KeyPairData>({
         action: MSG.VALIDATE_IMPORT_KEY,
-        payload: { privateKey },
+        payload: params,
+      }),
+  });
+}
+
+export function usePrepareOnboarding() {
+  return useMutation({
+    mutationFn: (publicKey: string) =>
+      sendMessage<OnboardingPrepareData>({
+        action: MSG.PREPARE_ONBOARDING,
+        payload: { publicKey },
       }),
   });
 }
@@ -27,6 +37,7 @@ export function useCompleteOnboarding() {
       password: string;
       privateKey: string;
       publicKey: string;
+      preparedParty?: OnboardingPrepareData;
     }) =>
       sendMessage<{ success: boolean }>({
         action: MSG.COMPLETE_ONBOARDING,
@@ -45,5 +56,29 @@ export function useExportPrivateKey() {
         action: MSG.EXPORT_PRIVATE_KEY,
         payload: { password },
       }),
+  });
+}
+
+export function usePreapprovalStatus() {
+  return useQuery({
+    queryKey: ['preapprovalStatus'],
+    queryFn: () =>
+      sendMessage<PreapprovalStatusData>({
+        action: MSG.GET_PREAPPROVAL_STATUS,
+      }),
+  });
+}
+
+export function useRegisterPreapproval() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () =>
+      sendMessage<{ success: boolean }>({
+        action: MSG.REGISTER_TRANSFER_PREAPPROVAL,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['preapprovalStatus'] });
+    },
   });
 }

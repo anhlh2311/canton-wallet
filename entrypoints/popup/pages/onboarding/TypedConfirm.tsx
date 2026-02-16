@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { ArrowLeftIcon, Loader2Icon } from 'lucide-react';
 import { TYPO_TEXT } from '@lib/constants';
+import type { OnboardingPrepareData } from '@lib/messaging';
 import { useCompleteOnboarding } from '../../hooks/useWallet';
 
 interface Props {
   password: string;
   privateKey: string;
   publicKey: string;
+  preparedParty: OnboardingPrepareData | null;
   onSuccess: () => void;
   onBack: () => void;
 }
 
-export function TypedConfirm({ password, privateKey, publicKey, onSuccess, onBack }: Props) {
+export function TypedConfirm({ password, privateKey, publicKey, preparedParty, onSuccess, onBack }: Props) {
   const [typed, setTyped] = useState('');
   const [error, setError] = useState('');
   const completeOnboarding = useCompleteOnboarding();
@@ -22,7 +24,12 @@ export function TypedConfirm({ password, privateKey, publicKey, onSuccess, onBac
     if (!matches) return;
     setError('');
     try {
-      await completeOnboarding.mutateAsync({ password, privateKey, publicKey });
+      await completeOnboarding.mutateAsync({
+        password,
+        privateKey,
+        publicKey,
+        preparedParty: preparedParty ?? undefined,
+      });
       onSuccess();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Onboarding failed');

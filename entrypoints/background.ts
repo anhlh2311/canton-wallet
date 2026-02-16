@@ -1,6 +1,8 @@
 import { MSG } from '@lib/messaging';
 import { err } from '@lib/messaging/protocol';
 import type { MessageRequest } from '@lib/messaging/types';
+import { NETWORKS } from '@lib/network';
+import { networkStore, localStore, setNetworkPrefix, setUserScope, migrateUnprefixedData, migrateToUserScoped } from '@lib/storage';
 
 import {
   handleGoogleAuth,
@@ -17,9 +19,12 @@ import {
 import {
   handleCreateKeypair,
   handleValidateImportKey,
+  handlePrepareOnboarding,
   handleCompleteOnboarding,
   handleExportPrivateKey,
   handleDeleteKeystore,
+  handleRegisterTransferPreapproval,
+  handleGetPreapprovalStatus,
 } from './background/handlers/keystore.handler';
 import {
   handleSignAndSubmitTransferPreapproval,
@@ -41,9 +46,31 @@ import {
   handleFetchAboutMe,
   handleRequestFaucet,
 } from './background/handlers/api.handler';
+import {
+  handleGetNetwork,
+  handleSwitchNetwork,
+} from './background/handlers/network.handler';
+import { setApiBaseUrl } from './background/api-client';
 
 export default defineBackground(() => {
   console.log('[Canton Wallet] Background service worker started');
+
+  // Initialize network: migrate legacy data, set prefix & API URL, set user scope
+  (async () => {
+    await migrateUnprefixedData();
+    const network = await networkStore.get();
+    setNetworkPrefix(network);
+    setApiBaseUrl(NETWORKS[network].apiBaseUrl);
+
+    // Migrate existing keystore/onboardingComplete to per-user keys
+    await migrateToUserScoped();
+
+    // Restore user scope from last logged-in user on this network
+    const user = await localStore.get('user');
+    if (user?.id) {
+      setUserScope(user.id);
+    }
+  })();
 
   // Set up auto-lock alarm listener
   setupAutoLock();
@@ -68,6 +95,12 @@ async function routeMessage(message: MessageRequest) {
     case MSG.LOGOUT:
       return handleLogout();
 
+    // Network
+    case MSG.GET_NETWORK:
+      return handleGetNetwork();
+    case MSG.SWITCH_NETWORK:
+      return handleSwitchNetwork(message.payload.network);
+
     // Session
     case MSG.UNLOCK:
       return handleUnlock(message.payload.password);
@@ -80,13 +113,21 @@ async function routeMessage(message: MessageRequest) {
     case MSG.CREATE_KEYPAIR:
       return handleCreateKeypair();
     case MSG.VALIDATE_IMPORT_KEY:
-      return handleValidateImportKey(message.payload.privateKey);
+      return handleValidateImportKey(message.payload.privateKey, message.payload.expectedPublicKey);
+    case MSG.PREPARE_ONBOARDING:
+      return handlePrepareOnboarding(message.payload.publicKey);
     case MSG.COMPLETE_ONBOARDING:
       return handleCompleteOnboarding(message.payload);
     case MSG.EXPORT_PRIVATE_KEY:
       return handleExportPrivateKey(message.payload.password);
     case MSG.DELETE_KEYSTORE:
       return handleDeleteKeystore();
+
+    // Transfer pre-approval
+    case MSG.REGISTER_TRANSFER_PREAPPROVAL:
+      return handleRegisterTransferPreapproval();
+    case MSG.GET_PREAPPROVAL_STATUS:
+      return handleGetPreapprovalStatus();
 
     // Signing
     case MSG.SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL:

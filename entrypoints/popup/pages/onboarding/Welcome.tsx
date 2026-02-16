@@ -1,8 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
+import { ChevronDownIcon } from 'lucide-react';
 import { useGoogleAuth } from '../../hooks/useAuth';
+import { useNetwork } from '../../hooks/useNetwork';
 import { IconGoogle } from '@assets/icons/icon-google';
 import { IconLogo } from '@assets/icons/icon-logo';
+import { NETWORK_IDS, NETWORKS, type NetworkId } from '@lib/network';
 import type { GoogleAuthData } from '@lib/messaging';
+
+const NETWORK_DOT_COLORS: Record<NetworkId, string> = {
+  devnet: 'bg-blue-400',
+  testnet: 'bg-yellow-400',
+  mainnet: 'bg-green-400',
+};
 
 interface Props {
   onSuccess: (data: GoogleAuthData) => void;
@@ -15,8 +24,28 @@ function isStandaloneWindow(): boolean {
 
 export function Welcome({ onSuccess }: Props) {
   const googleAuth = useGoogleAuth();
+  const { network, switchNetwork, isSwitching } = useNetwork();
   const [error, setError] = useState('');
+  const [networkOpen, setNetworkOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const authTriggered = useRef(false);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setNetworkOpen(false);
+      }
+    }
+    if (networkOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [networkOpen]);
+
+  const handleSwitchNetwork = async (id: NetworkId) => {
+    setNetworkOpen(false);
+    if (id === network) return;
+    await switchNetwork(id);
+  };
 
   // Auto-trigger auth when opened in a persistent window with ?action=sign-in
   useEffect(() => {
@@ -79,9 +108,43 @@ export function Welcome({ onSuccess }: Props) {
         {error && (
           <p className="text-sm text-destructive text-center">{error}</p>
         )}
+
+        {/* Network selector */}
+        <div ref={dropdownRef} className="relative">
+          <button
+            onClick={() => setNetworkOpen(!networkOpen)}
+            disabled={isSwitching}
+            className="w-full flex items-center justify-center gap-2 rounded-xl border border-border py-2.5 px-4 text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+          >
+            <span className={`w-2 h-2 rounded-full ${network ? NETWORK_DOT_COLORS[network] : 'bg-gray-400'}`} />
+            {network ? NETWORKS[network].label : '...'}
+            <ChevronDownIcon className="w-3.5 h-3.5" />
+          </button>
+
+          {networkOpen && (
+            <div className="absolute left-0 right-0 bottom-full mb-1 z-50 rounded-lg border border-border bg-popover shadow-lg">
+              {NETWORK_IDS.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => handleSwitchNetwork(id)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                    id === network
+                      ? 'bg-secondary text-foreground font-medium'
+                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${NETWORK_DOT_COLORS[id]}`} />
+                  {NETWORKS[id].label}
+                  {id === network && <span className="ml-auto text-primary">&#10003;</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <button
           onClick={handleGoogleSignIn}
-          disabled={googleAuth.isPending}
+          disabled={googleAuth.isPending || isSwitching}
           className="w-full flex items-center justify-center gap-3 rounded-xl bg-white text-black py-3 px-4 font-medium hover:bg-gray-100 disabled:opacity-50 transition-colors"
         >
           {googleAuth.isPending ? (

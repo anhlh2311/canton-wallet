@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { KeyIcon, ShieldIcon, InfoIcon, EyeIcon, EyeOffIcon, CopyIcon, CheckIcon, Loader2Icon } from 'lucide-react';
 import { sendMessage, MSG } from '@lib/messaging';
-import { onCopyText } from '@lib/utils';
+import type { NetworkData } from '@lib/messaging';
+import { onCopyText, convertBase64ToHex } from '@lib/utils';
 
 const KEY_DISPLAY_TIMEOUT_MS = 30_000; // Auto-clear after 30s
 
@@ -56,6 +57,7 @@ function ExportKeySection() {
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [revealed, setRevealed] = useState(false);
+  const [keyFormat, setKeyFormat] = useState<'base64' | 'hex'>('base64');
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -101,8 +103,14 @@ function ExportKeySection() {
     }
   };
 
+  const displayKey = privateKey
+    ? keyFormat === 'hex'
+      ? convertBase64ToHex(privateKey)
+      : privateKey
+    : '';
+
   const handleCopy = async () => {
-    await onCopyText(privateKey);
+    await onCopyText(displayKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -141,9 +149,32 @@ function ExportKeySection() {
 
         {privateKey && (
           <div className="space-y-3 pt-3 border-t border-border">
+            {/* Format toggle */}
+            <div className="flex rounded-md bg-background p-0.5 w-48">
+              <button
+                onClick={() => setKeyFormat('base64')}
+                className={`flex-1 rounded py-1 text-xs font-medium transition-colors ${
+                  keyFormat === 'base64'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Base64
+              </button>
+              <button
+                onClick={() => setKeyFormat('hex')}
+                className={`flex-1 rounded py-1 text-xs font-medium transition-colors ${
+                  keyFormat === 'hex'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Hex
+              </button>
+            </div>
             <div className="rounded-lg bg-background p-3">
               <p className="text-sm font-mono break-all text-foreground">
-                {revealed ? privateKey : '\u2022'.repeat(Math.min(privateKey.length, 60))}
+                {revealed ? displayKey : '\u2022'.repeat(Math.min(displayKey.length, 60))}
               </p>
             </div>
             <div className="flex gap-3">
@@ -266,6 +297,20 @@ function EncryptionSection() {
 
 function AboutSection() {
   const version = chrome.runtime.getManifest().version;
+  const [networkLabel, setNetworkLabel] = useState('...');
+  const [apiUrl, setApiUrl] = useState('...');
+
+  useEffect(() => {
+    sendMessage<NetworkData>({ action: MSG.GET_NETWORK })
+      .then((data) => {
+        setNetworkLabel(`Canton (Kairo) — ${data.config.label}`);
+        setApiUrl(data.config.apiBaseUrl);
+      })
+      .catch(() => {
+        setNetworkLabel('Canton (Kairo)');
+        setApiUrl('Unknown');
+      });
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -283,12 +328,12 @@ function AboutSection() {
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Network</span>
-          <span className="text-foreground">Canton (Kairo)</span>
+          <span className="text-foreground">{networkLabel}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">API</span>
           <span className="text-foreground truncate max-w-[280px]">
-            {import.meta.env.VITE_API_BASE_URL || 'Not configured'}
+            {apiUrl}
           </span>
         </div>
         <div className="flex justify-between">

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { EyeIcon, EyeOffIcon } from 'lucide-react';
+import { EyeIcon, EyeOffIcon, LogOutIcon } from 'lucide-react';
 
 interface Props {
   onNext: (password: string) => void;
+  onReset: () => void;
 }
 
 const PASSWORD_RULES = [
@@ -13,7 +14,7 @@ const PASSWORD_RULES = [
   { label: 'Special character', test: (p: string) => /[!@#$%^&*(),.?":{}|<>]/.test(p) },
 ];
 
-export function CreatePassword({ onNext }: Props) {
+export function CreatePassword({ onNext, onReset }: Props) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -92,6 +93,14 @@ export function CreatePassword({ onNext }: Props) {
         className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-medium disabled:opacity-40 transition-opacity"
       >
         Continue
+      </button>
+
+      <button
+        onClick={onReset}
+        className="w-full flex items-center justify-center gap-1.5 mt-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <LogOutIcon className="w-3.5 h-3.5" />
+        Sign out & reset
       </button>
     </div>
   );

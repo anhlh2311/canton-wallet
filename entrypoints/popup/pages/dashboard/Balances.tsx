@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react';
 import { useBalances } from '../../hooks/useBalances';
-import { Loader2Icon, AlertCircleIcon } from 'lucide-react';
+import { usePreapprovalStatus, useRegisterPreapproval } from '../../hooks/useWallet';
+import { Loader2Icon, AlertCircleIcon, ShieldCheckIcon, CheckCircle2Icon } from 'lucide-react';
 import { IconCanton } from '@assets/icons/icon-canton';
 import { IconCBTCCoin } from '@assets/icons/icon-yield-coin';
 import { IconUSDC } from '@assets/icons/icon-usdc';
@@ -14,69 +16,124 @@ const TOKEN_ICONS: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
 
 export function Balances() {
   const { data, isLoading, error, refetch } = useBalances();
+  const { data: preapprovalData, isLoading: preapprovalLoading } = usePreapprovalStatus();
+  const registerPreapproval = useRegisterPreapproval();
+  const [preapprovalError, setPreapprovalError] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-40">
-        <Loader2Icon className="w-6 h-6 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const handleRegisterPreapproval = async () => {
+    setPreapprovalError('');
+    try {
+      await registerPreapproval.mutateAsync();
+      setShowSuccess(true);
+    } catch (e: unknown) {
+      setPreapprovalError(e instanceof Error ? e.message : 'Registration failed');
+    }
+  };
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-40 gap-2">
-        <AlertCircleIcon className="w-5 h-5 text-destructive" />
-        <p className="text-sm text-destructive">Failed to load balances</p>
-        <button onClick={() => refetch()} className="text-xs text-primary hover:underline">
-          Retry
-        </button>
-      </div>
-    );
-  }
+  // Auto-dismiss success message after 5 seconds
+  useEffect(() => {
+    if (!showSuccess) return;
+    const timer = setTimeout(() => setShowSuccess(false), 5000);
+    return () => clearTimeout(timer);
+  }, [showSuccess]);
 
   const balances = data?.balances ?? [];
-
-  if (balances.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
-        No token balances found
-      </div>
-    );
-  }
+  const showPreapprovalBanner =
+    !preapprovalLoading &&
+    !registerPreapproval.isSuccess &&
+    (!preapprovalData || !preapprovalData.hasPreapproval);
 
   return (
     <div className="p-4 space-y-3">
-      {balances.map((b) => {
-        const tokenId = b.instrumentId?.id ?? 'Unknown';
-        const Icon = TOKEN_ICONS[tokenId] ?? IconDefaultToken;
-        const total = new BigNumber(b.unlocked ?? '0').plus(b.locked ?? '0');
-
-        return (
-          <div
-            key={tokenId}
-            className="rounded-xl bg-secondary p-4 flex items-center gap-3"
-          >
-            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-background">
-              <Icon className="w-8 h-8" />
-            </div>
-            <div className="flex-1">
-              <p className="font-medium text-foreground">{tokenId}</p>
-              <p className="text-xs text-muted-foreground">
-                Available: {new BigNumber(b.unlocked ?? '0').toFormat()}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="font-medium text-foreground">{total.toFormat()}</p>
-              {new BigNumber(b.locked ?? '0').gt(0) && (
-                <p className="text-xs text-yellow-500">
-                  Locked: {new BigNumber(b.locked ?? '0').toFormat()}
-                </p>
-              )}
-            </div>
+      {/* Transfer pre-approval banner — always visible when no active preapproval */}
+      {showPreapprovalBanner && (
+        <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldCheckIcon className="w-4 h-4 text-yellow-500 shrink-0" />
+            <p className="text-xs font-medium text-yellow-500">
+              Transfer pre-approval not active
+            </p>
           </div>
-        );
-      })}
+          <p className="text-xs text-muted-foreground mb-2">
+            Register transfer pre-approval to enable receiving Amulet transfers.
+          </p>
+          {preapprovalError && (
+            <p className="text-xs text-destructive mb-2">{preapprovalError}</p>
+          )}
+          <button
+            onClick={handleRegisterPreapproval}
+            disabled={registerPreapproval.isPending}
+            className="w-full rounded-lg bg-yellow-500 text-black py-1.5 text-xs font-medium disabled:opacity-50 transition-opacity"
+          >
+            {registerPreapproval.isPending ? (
+              <Loader2Icon className="w-3.5 h-3.5 animate-spin mx-auto" />
+            ) : (
+              'Register Transfer Pre-Approval'
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Success message after registration */}
+      {showSuccess && (
+        <div className="rounded-xl bg-green-500/10 border border-green-500/30 p-3 flex items-center gap-2">
+          <CheckCircle2Icon className="w-4 h-4 text-green-500 shrink-0" />
+          <p className="text-xs font-medium text-green-500">
+            Transfer pre-approval registered successfully!
+          </p>
+        </div>
+      )}
+
+      {/* Balance content */}
+      {isLoading ? (
+        <div className="flex items-center justify-center h-40">
+          <Loader2Icon className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center h-40 gap-2">
+          <AlertCircleIcon className="w-5 h-5 text-destructive" />
+          <p className="text-sm text-destructive">Failed to load balances</p>
+          <button onClick={() => refetch()} className="text-xs text-primary hover:underline">
+            Retry
+          </button>
+        </div>
+      ) : balances.length === 0 ? (
+        <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
+          No token balances found
+        </div>
+      ) : (
+        balances.map((b) => {
+          const tokenId = b.instrumentId?.id ?? 'Unknown';
+          const Icon = TOKEN_ICONS[tokenId] ?? IconDefaultToken;
+          const total = new BigNumber(b.unlocked ?? '0').plus(b.locked ?? '0');
+
+          return (
+            <div
+              key={tokenId}
+              className="rounded-xl bg-secondary p-4 flex items-center gap-3"
+            >
+              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-background">
+                <Icon className="w-8 h-8" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-foreground">{tokenId}</p>
+                <p className="text-xs text-muted-foreground">
+                  Available: {new BigNumber(b.unlocked ?? '0').toFormat()}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-medium text-foreground">{total.toFormat()}</p>
+                {new BigNumber(b.locked ?? '0').gt(0) && (
+                  <p className="text-xs text-yellow-500">
+                    Locked: {new BigNumber(b.locked ?? '0').toFormat()}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }

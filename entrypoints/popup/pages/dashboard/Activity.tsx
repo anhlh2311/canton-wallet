@@ -6,8 +6,7 @@ import type { AuthStateData } from '@lib/messaging';
 import { format } from '@lib/format';
 import BigNumber from 'bignumber.js';
 import { useQuery } from '@tanstack/react-query';
-
-const EXPLORER_LINK = import.meta.env.VITE_EXPLORER_LINK ?? '';
+import { useNetwork } from '../../hooks/useNetwork';
 
 export function Activity() {
   const [page, setPage] = useState(1);
@@ -16,8 +15,10 @@ export function Activity() {
     queryKey: ['authState'],
     queryFn: () => sendMessage<AuthStateData>({ action: MSG.GET_AUTH_STATE }),
   });
+  const { config: networkConfig } = useNetwork();
 
   const partyId = authState?.partyId ?? '';
+  const explorerLink = networkConfig?.explorerUrl ?? '';
 
   if (isLoading) {
     return (
@@ -78,9 +79,9 @@ export function Activity() {
                 {isSender ? '-' : '+'}
                 {new BigNumber(item.amount).toFormat()}
               </p>
-              {EXPLORER_LINK && item.updateId && (
+              {explorerLink && item.updateId && (
                 <a
-                  href={`${EXPLORER_LINK}/transactions/${item.updateId}`}
+                  href={`${explorerLink}/transactions/${item.updateId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-muted-foreground hover:text-foreground"

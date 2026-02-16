@@ -1,6 +1,6 @@
 import { ok, err } from '@lib/messaging';
 import type { MessageResponse, AuthStateData, GoogleAuthData } from '@lib/messaging';
-import { localStore } from '@lib/storage';
+import { localStore, setUserScope } from '@lib/storage';
 import { sessionStore } from '@lib/storage';
 import apiClient from '../api-client';
 
@@ -96,13 +96,16 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
 
     const { token, refreshToken, user } = loginData.data;
 
+    // Set user scope BEFORE reading/writing user-scoped data (keystore, onboardingComplete)
+    setUserScope(user.id);
+
     // Store auth tokens in session
     await sessionStore.setMany({
       authToken: token,
       refreshToken,
     });
 
-    // Store user in local storage
+    // Store user in local storage (network-scoped, not user-scoped)
     await localStore.set('user', user);
 
     // Fetch party info
@@ -117,12 +120,16 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
     }
     await sessionStore.set('partyStatus', partyStatus);
 
+    // Check if this user has already completed onboarding on this network
+    const onboardingComplete = !!(await localStore.get('onboardingComplete'));
+
     return ok({
       token,
       user,
       partyId: partyId ?? '',
       partyStatus,
       publicKey,
+      onboardingComplete,
     });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Google auth failed');
@@ -132,13 +139,18 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
 export async function handleGetAuthState(): Promise<MessageResponse<AuthStateData>> {
   try {
     const token = await sessionStore.get('authToken');
-    const user = await localStore.get('user');
+    const user = await localStore.get('user'); // network-scoped
     const partyId = await sessionStore.get('partyId');
+
+    // Set user scope so onboardingComplete reads the correct per-user key
+    setUserScope(user?.id ?? null);
+    const onboardingComplete = !!(await localStore.get('onboardingComplete'));
 
     return ok({
       isAuthenticated: !!token,
       user,
       partyId,
+      onboardingComplete,
     });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Failed to get auth state');
@@ -169,6 +181,7 @@ export async function handleLogout(): Promise<MessageResponse<void>> {
   try {
     await sessionStore.clear();
     await localStore.set('user', null);
+    setUserScope(null);
     return ok(undefined);
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Logout failed');

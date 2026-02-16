@@ -1,8 +1,9 @@
 import { ok, err } from '@lib/messaging';
-import type { MessageResponse, KeyPairData } from '@lib/messaging';
+import type { MessageResponse, KeyPairData, OnboardingPrepareData, PreapprovalStatusData } from '@lib/messaging';
 import { localStore, sessionStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
 import apiClient from '../api-client';
+import { setCachedPrivateKey, getCachedPrivateKey } from './session.handler';
 
 export async function handleCreateKeypair(): Promise<MessageResponse<KeyPairData>> {
   try {
@@ -21,6 +22,7 @@ export async function handleCreateKeypair(): Promise<MessageResponse<KeyPairData
 
 export async function handleValidateImportKey(
   rawKey: string,
+  expectedPublicKey?: string,
 ): Promise<MessageResponse<KeyPairData>> {
   try {
     // Accept both hex and base64 — normalize to base64 for the signing lib
@@ -31,9 +33,37 @@ export async function handleValidateImportKey(
     );
     const publicKey = getPublicKeyFromPrivate(privateKey);
 
+    // If an expected public key is provided, verify the imported key matches.
+    // The backend may return the key in base64 or hex, so check both formats.
+    if (expectedPublicKey) {
+      const derivedHex = base64ToHex(publicKey);
+      const matches =
+        publicKey === expectedPublicKey || derivedHex === expectedPublicKey;
+      if (!matches) {
+        return err(
+          'The imported private key does not match your account\'s public key. Please use the correct key.',
+        );
+      }
+    }
+
     return ok({ privateKey, publicKey });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Invalid private key');
+  }
+}
+
+export async function handlePrepareOnboarding(
+  publicKey: string,
+): Promise<MessageResponse<OnboardingPrepareData>> {
+  try {
+    const { data: res } = await apiClient.post(
+      '/external-party/onboarding/prepare',
+      { publicKey },
+    );
+    const preparedParty: OnboardingPrepareData = res.data;
+    return ok(preparedParty);
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Onboarding prepare failed');
   }
 }
 
@@ -41,9 +71,10 @@ export async function handleCompleteOnboarding(payload: {
   password: string;
   privateKey: string;
   publicKey: string;
+  preparedParty?: OnboardingPrepareData;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
-    const { password, privateKey, publicKey } = payload;
+    const { password, privateKey, publicKey, preparedParty } = payload;
     const provider = await getEncryptionProvider();
 
     // Encrypt and store the key
@@ -52,60 +83,89 @@ export async function handleCompleteOnboarding(payload: {
     await localStore.set('keystore', bundle);
 
     // Import signing lib (needed for both onboarding and auto-approval)
-    const { signTransactionHash } = await import(
+    const { signTransactionHash, getPublicKeyFromPrivate } = await import(
       '@canton-network/core-signing-lib'
     );
 
     // Only run onboarding if the user is new (not already registered on the backend)
     const partyStatus = await sessionStore.get('partyStatus');
     if (partyStatus !== 'SUCCESSFULLY') {
-      const hexPubKey = base64ToHex(publicKey);
-      const { data: prepareData } = await apiClient.post(
-        '/external-party/onboarding/prepare',
-        { publicKey: hexPubKey },
-      );
+      // Use pre-fetched prepare data, or call prepare now as fallback
+      let prepared: OnboardingPrepareData;
+      if (preparedParty) {
+        prepared = preparedParty;
+      } else {
+        const { data: res } = await apiClient.post(
+          '/external-party/onboarding/prepare',
+          { publicKey },
+        );
+        prepared = res.data;
+      }
 
-      const { preparedTransaction, preparedTransactionHash } =
-        prepareData.data;
-
-      const signature = signTransactionHash(preparedTransactionHash, privateKey);
+      const signedHash = signTransactionHash(prepared.multiHash, privateKey);
 
       await apiClient.post('/external-party/onboarding/submit', {
-        preparedTransaction,
-        signature,
+        signedHash,
+        preparedParty: prepared,
       });
     }
 
+    // Re-fetch partyId from backend (it may have been assigned during onboarding submit)
+    let partyId = await sessionStore.get('partyId');
+    console.log('[Canton Wallet] Auto-approval: partyId from session =', partyId);
+    if (!partyId) {
+      try {
+        const { data: meData } = await apiClient.get('/auth/me');
+        partyId = meData.data?.party?.partyId ?? null;
+        console.log('[Canton Wallet] Auto-approval: partyId from /auth/me =', partyId);
+        if (partyId) await sessionStore.set('partyId', partyId);
+      } catch (e) {
+        console.warn('[Canton Wallet] Auto-approval: failed to fetch partyId', e);
+      }
+    }
+
     // Set up auto-approval: prepare → sign → submit (both new and existing users)
-    const partyId = await sessionStore.get('partyId');
     if (partyId) {
       try {
+        console.log('[Canton Wallet] Auto-approval: preparing for partyId =', partyId);
         const { data: autoData } = await apiClient.post(
           '/auto-approval/prepare',
           { partyId },
         );
+        console.log('[Canton Wallet] Auto-approval: prepare response =', autoData);
         const autoSig = signTransactionHash(
           autoData.data.preparedTransactionHash,
           privateKey,
         );
+        const derivedPublicKey = getPublicKeyFromPrivate(privateKey);
         await apiClient.post('/auto-approval/submit', {
-          preparedTransaction: autoData.data.preparedTransaction,
+          contractId: autoData.data.contractId,
+          publicKey: derivedPublicKey,
           signature: autoSig,
+          preparedTransaction: autoData.data.preparedTransaction,
+          partyId,
         });
-      } catch {
-        // Auto-approval is best-effort
+        console.log('[Canton Wallet] Auto-approval: submitted successfully');
+      } catch (e) {
+        console.warn('[Canton Wallet] Auto-approval: failed', e);
       }
+    } else {
+      console.warn('[Canton Wallet] Auto-approval: skipped — no partyId available');
     }
 
     // Request faucet (best-effort)
     try {
       const faucetPartyId = partyId || (await sessionStore.get('partyId'));
       if (faucetPartyId) {
+        console.log('[Canton Wallet] Requesting faucet for partyId =', faucetPartyId);
         await apiClient.post('/external-party/request-faucet', { partyId: faucetPartyId });
       }
-    } catch {
-      // Faucet is best-effort
+    } catch (e) {
+      console.warn('[Canton Wallet] Faucet request failed', e);
     }
+
+    // Cache the private key in memory so dashboard features (like preapproval) work without re-entering password
+    setCachedPrivateKey(privateKey);
 
     await localStore.set('onboardingComplete', true);
     await sessionStore.set('unlocked', true);
@@ -129,6 +189,76 @@ export async function handleExportPrivateKey(
     return ok({ privateKey });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Failed to export key');
+  }
+}
+
+export async function handleRegisterTransferPreapproval(): Promise<
+  MessageResponse<{ success: boolean }>
+> {
+  try {
+    // Ensure we have a partyId — re-fetch from backend if not cached
+    let partyId = await sessionStore.get('partyId');
+    if (!partyId) {
+      try {
+        const { data: meData } = await apiClient.get('/auth/me');
+        partyId = meData.data?.party?.partyId ?? null;
+        if (partyId) await sessionStore.set('partyId', partyId);
+      } catch {
+        // ignore
+      }
+    }
+    if (!partyId) return err('No party ID found. Please try again later.');
+
+    // Use cached key if available
+    const privateKey = getCachedPrivateKey();
+    if (!privateKey) {
+      return err('Wallet is locked. Please unlock first.');
+    }
+
+    const { signTransactionHash, getPublicKeyFromPrivate } = await import(
+      '@canton-network/core-signing-lib'
+    );
+
+    const { data: prepareRes } = await apiClient.post(
+      '/auto-approval/prepare',
+      { partyId },
+    );
+    const signature = signTransactionHash(
+      prepareRes.data.preparedTransactionHash,
+      privateKey,
+    );
+    const publicKey = getPublicKeyFromPrivate(privateKey);
+    await apiClient.post('/auto-approval/submit', {
+      contractId: prepareRes.data.contractId,
+      publicKey,
+      signature,
+      preparedTransaction: prepareRes.data.preparedTransaction,
+      partyId,
+    });
+
+    return ok({ success: true });
+  } catch (e: unknown) {
+    return err(
+      e instanceof Error ? e.message : 'Transfer pre-approval failed',
+    );
+  }
+}
+
+export async function handleGetPreapprovalStatus(): Promise<
+  MessageResponse<PreapprovalStatusData>
+> {
+  try {
+    const partyId = await sessionStore.get('partyId');
+    if (!partyId) return ok({ hasPreapproval: false });
+
+    const { data: res } = await apiClient.get(`/auto-approval/${partyId}`);
+    // If the API returns data, the user has an active preapproval (same check as canton-exchange-frontend)
+    const hasPreapproval = !!res.data;
+
+    return ok({ hasPreapproval });
+  } catch {
+    // If 404 or similar, treat as no preapproval
+    return ok({ hasPreapproval: false });
   }
 }
 

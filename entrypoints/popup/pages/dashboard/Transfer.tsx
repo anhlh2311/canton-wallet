@@ -7,12 +7,14 @@ import {
   usePrepareTransferTokenStandard,
   useSignAndSubmitTransferTokenStandard,
 } from '../../hooks/useTransfer';
+import { useBalances } from '../../hooks/useBalances';
 import { sendMessage, MSG } from '@lib/messaging';
 import type { AuthStateData } from '@lib/messaging';
 import type {
   PrepareTransferResponse,
   PrepareTransferTokenStandardResponse,
 } from '@lib/types';
+import BigNumber from 'bignumber.js';
 
 export function Transfer() {
   const [recipient, setRecipient] = useState('');
@@ -30,10 +32,18 @@ export function Transfer() {
   const prepareStandard = usePrepareTransferTokenStandard();
   const submitStandard = useSignAndSubmitTransferTokenStandard();
 
+  const { data: balancesData } = useBalances();
+
   const isAmulet = tokenId === 'Amulet';
   const isPreparing = prepareAmulet.isPending || prepareStandard.isPending;
   const isSubmitting = submitAmulet.isPending || submitStandard.isPending;
   const token = SUPPORTED_TOKENS.find((t) => t.id === tokenId);
+
+  const selectedBalance = balancesData?.balances?.find(
+    (b) => b.instrumentId?.id === tokenId,
+  );
+  const availableBalance = new BigNumber(selectedBalance?.unlocked ?? '0');
+  const lockedBalance = new BigNumber(selectedBalance?.locked ?? '0');
 
   const handlePrepare = async () => {
     setError('');
@@ -180,6 +190,14 @@ export function Transfer() {
             </option>
           ))}
         </select>
+        {selectedBalance && (
+          <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+            <span>Available: <span className="text-foreground font-medium">{availableBalance.toFormat()}</span></span>
+            {lockedBalance.gt(0) && (
+              <span>Locked: <span className="text-yellow-500 font-medium">{lockedBalance.toFormat()}</span></span>
+            )}
+          </div>
+        )}
       </div>
 
       <div>
@@ -197,13 +215,24 @@ export function Transfer() {
         <label className="text-sm text-muted-foreground">
           Amount {token && `(min: ${token.minAmount})`}
         </label>
-        <input
-          type="text"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="w-full mt-1 rounded-lg bg-secondary text-foreground px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary"
-          placeholder="0.00"
-        />
+        <div className="relative mt-1">
+          <input
+            type="text"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full rounded-lg bg-secondary text-foreground px-4 py-3 pr-16 text-sm outline-none focus:ring-2 focus:ring-primary"
+            placeholder="0.00"
+          />
+          {availableBalance.gt(0) && (
+            <button
+              type="button"
+              onClick={() => setAmount(availableBalance.toFixed())}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-primary/15 text-primary px-2 py-0.5 text-xs font-semibold hover:bg-primary/25 transition-colors"
+            >
+              MAX
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}

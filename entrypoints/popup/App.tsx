@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { sendMessage, MSG } from '@lib/messaging';
+import type { KeyPairData, OnboardingPrepareData } from '@lib/messaging';
 import { useAuthState } from './hooks/useAuth';
 import { useLockState } from './hooks/useLockState';
 
@@ -27,6 +29,9 @@ interface OnboardingState {
   privateKey: string;
   publicKey: string;
   isImport: boolean;
+  partyStatus: string;
+  existingPublicKey: string;
+  preparedParty: OnboardingPrepareData | null;
 }
 
 const EMPTY_ONBOARDING: OnboardingState = {
@@ -34,6 +39,9 @@ const EMPTY_ONBOARDING: OnboardingState = {
   privateKey: '',
   publicKey: '',
   isImport: false,
+  partyStatus: 'PENDING',
+  existingPublicKey: '',
+  preparedParty: null,
 };
 
 /** True when the app is running inside a persistent auth window (not the popup). */
@@ -67,19 +75,18 @@ function App() {
     }
 
     // Authenticated but locked — check if onboarding is done
-    chrome.storage.local.get('onboardingComplete', (result) => {
-      if (result.onboardingComplete) {
-        // Onboarding already complete — if we're in the persistent auth window,
-        // close it and let the user continue via the extension popup.
-        if (IS_STANDALONE_WINDOW) {
-          window.close();
-          return;
-        }
-        setScreen('unlock');
-      } else {
-        setScreen('create-password');
+    // (onboardingComplete comes from the background via namespaced localStore)
+    if (authState.onboardingComplete) {
+      // Onboarding already complete — if we're in the persistent auth window,
+      // close it and let the user continue via the extension popup.
+      if (IS_STANDALONE_WINDOW) {
+        window.close();
+        return;
       }
-    });
+      setScreen('unlock');
+    } else {
+      setScreen('create-password');
+    }
   }, [authState, lockState, authLoading, lockLoading]);
 
   if (screen === 'loading') {
@@ -95,9 +102,21 @@ function App() {
       return (
         <Welcome
           onSuccess={(data) => {
-            if (data.partyStatus === 'SUCCESSFULLY') {
+            if (data.onboardingComplete) {
+              // User already has a keystore on this network — go straight to unlock.
+              // If in persistent window, close it (popup will show unlock via useEffect).
+              if (IS_STANDALONE_WINDOW) {
+                window.close();
+                return;
+              }
               setScreen('unlock');
             } else {
+              // Store party info for the onboarding flow
+              setOnboarding((prev) => ({
+                ...prev,
+                partyStatus: data.partyStatus,
+                existingPublicKey: data.publicKey,
+              }));
               setScreen('create-password');
             }
           }}
@@ -107,9 +126,43 @@ function App() {
     case 'create-password':
       return (
         <CreatePassword
-          onNext={(password) => {
-            setOnboarding((prev) => ({ ...prev, password }));
-            setScreen('key-setup');
+          onReset={async () => {
+            await sendMessage({ action: MSG.LOGOUT });
+            clearOnboarding();
+            setScreen('welcome');
+          }}
+          onNext={async (password) => {
+            if (onboarding.partyStatus === 'SUCCESSFULLY' || onboarding.existingPublicKey) {
+              // User already has a key pair on the backend (fully onboarded or onboarding underway) — import existing key
+              setOnboarding((prev) => ({ ...prev, password }));
+              setScreen('key-setup');
+            } else {
+              // Truly new user (no public key yet) — auto-generate keypair, fire prepare in background, skip to show-key
+              try {
+                const data = await sendMessage<KeyPairData>({ action: MSG.CREATE_KEYPAIR });
+                setOnboarding((prev) => ({
+                  ...prev,
+                  password,
+                  privateKey: data.privateKey,
+                  publicKey: data.publicKey,
+                  isImport: false,
+                }));
+                setScreen('show-key');
+                // Fire onboarding prepare in background while user goes through confirmation screens
+                sendMessage<OnboardingPrepareData>({
+                  action: MSG.PREPARE_ONBOARDING,
+                  payload: { publicKey: data.publicKey },
+                }).then((prepared) => {
+                  setOnboarding((prev) => ({ ...prev, preparedParty: prepared }));
+                }).catch(() => {
+                  // Will be retried in handleCompleteOnboarding if needed
+                });
+              } catch {
+                // Fallback to key-setup if generation fails
+                setOnboarding((prev) => ({ ...prev, password }));
+                setScreen('key-setup');
+              }
+            }
           }}
         />
       );
@@ -117,6 +170,7 @@ function App() {
     case 'key-setup':
       return (
         <KeySetup
+          existingPublicKey={onboarding.existingPublicKey}
           onNext={(data) => {
             setOnboarding((prev) => ({
               ...prev,
@@ -136,7 +190,7 @@ function App() {
         <ShowPrivateKey
           privateKey={onboarding.privateKey}
           onNext={() => setScreen('acknowledgment')}
-          onBack={() => setScreen('key-setup')}
+          onBack={() => setScreen('create-password')}
         />
       );
 
@@ -154,6 +208,7 @@ function App() {
           password={onboarding.password}
           privateKey={onboarding.privateKey}
           publicKey={onboarding.publicKey}
+          preparedParty={onboarding.preparedParty}
           onSuccess={() => {
             clearOnboarding();
             setScreen('dashboard');

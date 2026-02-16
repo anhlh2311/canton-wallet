@@ -1,10 +1,15 @@
 import axios from 'axios';
 import { sessionStore } from '@lib/storage';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+let currentBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
+
+export function setApiBaseUrl(url: string): void {
+  currentBaseUrl = url;
+  apiClient.defaults.baseURL = url;
+}
 
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: currentBaseUrl,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -30,7 +35,7 @@ apiClient.interceptors.response.use(
         const refreshToken = await sessionStore.get('refreshToken');
         if (!refreshToken) throw new Error('No refresh token');
 
-        const { data } = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
+        const { data } = await axios.post(`${currentBaseUrl}/auth/refresh-token`, {
           refreshToken,
         });
 

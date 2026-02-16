@@ -1,4 +1,5 @@
 import type { MSG } from './constants';
+import type { NetworkId, NetworkConfig } from '../network';
 import type {
   AboutMeResponse,
   ActivityResponse,
@@ -27,11 +28,18 @@ export type MessageRequest =
   | { action: typeof MSG.UNLOCK; payload: { password: string } }
   | { action: typeof MSG.LOCK }
   | { action: typeof MSG.GET_LOCK_STATE }
+  // Network
+  | { action: typeof MSG.GET_NETWORK }
+  | { action: typeof MSG.SWITCH_NETWORK; payload: { network: NetworkId } }
   // Keystore
   | { action: typeof MSG.CREATE_KEYPAIR }
   | {
       action: typeof MSG.VALIDATE_IMPORT_KEY;
-      payload: { privateKey: string };
+      payload: { privateKey: string; expectedPublicKey?: string };
+    }
+  | {
+      action: typeof MSG.PREPARE_ONBOARDING;
+      payload: { publicKey: string };
     }
   | {
       action: typeof MSG.COMPLETE_ONBOARDING;
@@ -39,6 +47,7 @@ export type MessageRequest =
         password: string;
         privateKey: string;
         publicKey: string;
+        preparedParty?: OnboardingPrepareData;
       };
     }
   | {
@@ -46,6 +55,9 @@ export type MessageRequest =
       payload: { password: string };
     }
   | { action: typeof MSG.DELETE_KEYSTORE }
+  // Transfer pre-approval
+  | { action: typeof MSG.REGISTER_TRANSFER_PREAPPROVAL }
+  | { action: typeof MSG.GET_PREAPPROVAL_STATUS }
   // Signing
   | {
       action: typeof MSG.SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL;
@@ -121,18 +133,25 @@ export type MessageResponse<T = unknown> =
 
 // ── Response data by action ──
 
+export interface NetworkData {
+  network: NetworkId;
+  config: NetworkConfig;
+}
+
 export interface AuthStateData {
   isAuthenticated: boolean;
   user: User | null;
   partyId: string | null;
+  onboardingComplete: boolean;
 }
 
 export interface GoogleAuthData {
   token: string;
   user: User;
   partyId: string;
-  partyStatus: 'PENDING' | 'ACTIVE';
+  partyStatus: 'PENDING' | 'SUCCESSFULLY' | 'DEACTIVATED';
   publicKey: string;
+  onboardingComplete: boolean;
 }
 
 export interface LockStateData {
@@ -176,4 +195,15 @@ export interface AboutMeData {
 
 export interface PrepareData {
   preparedData: PrepareTransferResponse | PrepareTransferTokenStandardResponse | AutoApprovalPrepareResponse;
+}
+
+export interface PreapprovalStatusData {
+  hasPreapproval: boolean;
+}
+
+export interface OnboardingPrepareData {
+  partyId: string;
+  namespace: string;
+  multiHash: string;
+  topologyTransactions: string[];
 }

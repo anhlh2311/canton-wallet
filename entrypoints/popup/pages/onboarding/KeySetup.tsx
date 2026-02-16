@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useCreateKeypair, useValidateImportKey } from '../../hooks/useWallet';
-import { KeyRoundIcon, ImportIcon, ArrowLeftIcon, Loader2Icon } from 'lucide-react';
+import { KeyRoundIcon, ImportIcon, ArrowLeftIcon, Loader2Icon, AlertTriangleIcon } from 'lucide-react';
 
 interface Props {
+  existingPublicKey?: string;
   onNext: (data: { privateKey: string; publicKey: string; isImport: boolean }) => void;
   onBack: () => void;
 }
 
-export function KeySetup({ onNext, onBack }: Props) {
-  const [mode, setMode] = useState<'choose' | 'import'>('choose');
+export function KeySetup({ existingPublicKey, onNext, onBack }: Props) {
+  const isExistingUser = !!existingPublicKey;
+  const [mode, setMode] = useState<'choose' | 'import'>(isExistingUser ? 'import' : 'choose');
   const [importKey, setImportKey] = useState('');
   const [error, setError] = useState('');
 
@@ -32,7 +34,10 @@ export function KeySetup({ onNext, onBack }: Props) {
       return;
     }
     try {
-      const data = await validateImport.mutateAsync(importKey.trim());
+      const data = await validateImport.mutateAsync({
+        privateKey: importKey.trim(),
+        expectedPublicKey: existingPublicKey,
+      });
       onNext({ ...data, isImport: true });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Invalid private key');
@@ -44,11 +49,32 @@ export function KeySetup({ onNext, onBack }: Props) {
   if (mode === 'import') {
     return (
       <div className="flex flex-col h-full p-6 bg-background">
-        <button onClick={() => setMode('choose')} className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
+        <button
+          onClick={() => (isExistingUser ? onBack() : setMode('choose'))}
+          className="flex items-center gap-1 text-sm text-muted-foreground mb-4"
+        >
           <ArrowLeftIcon className="w-4 h-4" /> Back
         </button>
 
         <h1 className="text-xl font-bold text-foreground mb-2">Import Key</h1>
+
+        {isExistingUser && (
+          <div className="flex gap-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-3 mb-4">
+            <AlertTriangleIcon className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-foreground mb-1">
+                This account is already onboarded
+              </p>
+              <p className="text-muted-foreground">
+                You must import the private key that corresponds to your existing public key. Using a different key will result in failed transactions.
+              </p>
+              <p className="text-xs text-muted-foreground mt-2 font-mono break-all">
+                Public key: {existingPublicKey}
+              </p>
+            </div>
+          </div>
+        )}
+
         <p className="text-sm text-muted-foreground mb-6">
           Paste your existing Canton private key (Base64 or Hex).
         </p>
