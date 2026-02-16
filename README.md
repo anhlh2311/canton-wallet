@@ -9,13 +9,19 @@ Built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4.
 ## Features
 
 - **Google OAuth sign-in** via `chrome.identity.launchWebAuthFlow()`
+- **Multi-network support** — Runtime switching between Devnet, Testnet, and Mainnet with color-coded dropdown
+- **Per-user, per-network storage isolation** — Each user's keystore and onboarding state is scoped by `{network}:{userId}`, so switching networks or accounts never leaks data
 - **Token balances** — Amulet/CC, CBTC, USDCx with locked/unlocked breakdown
-- **Transfers** — Dual-path: Amulet (transfer-preapproval) and CBTC/USDCx (token-standard)
+- **Transfers** — Dual-path: Amulet (transfer-preapproval) and CBTC/USDCx (token-standard), with per-token balance display and MAX button
+- **Transfer pre-approval** — Auto-registered after onboarding; manual registration via dashboard banner if missing
 - **Offers** — Incoming (approve/reject), Outgoing (read-only), History
-- **Activity** — Paginated transaction history with block explorer links
+- **Activity** — Paginated transaction history with dynamic block explorer links (per-network)
+- **Smart onboarding** — Detects returning users (existing public key on backend) and routes to key import instead of generation
 - **Auto-lock** — Configurable timer (default 15 min) using `chrome.alarms`
+- **In-memory key caching** — Private key cached in background service worker during unlocked session for passwordless signing of auto-approval and pre-approval operations
 - **Dual encryption** — Web Crypto API (PBKDF2 + AES-256-GCM) or CryptoJS AES, selectable at build time
 - **Key isolation** — Private keys never leave the background service worker
+- **Key export** — Base64 or Hex format toggle on options page
 - **Cross-browser** — Chrome (Manifest V3) and Firefox (Manifest V2, via WXT)
 
 ---
@@ -96,12 +102,26 @@ Copy `.env.example` to `.env` and fill in values:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `VITE_API_BASE_URL` | `https://api-devnet.kairo.ag/` | Backend API (same as web app) |
 | `VITE_GOOGLE_CLIENT_ID` | — | Google OAuth client ID |
 | `VITE_ENCRYPTION_BACKEND` | `webcrypto` | `webcrypto` or `cryptojs` |
 | `VITE_SALT_ROUNDS` | `10` | bcrypt salt rounds (cryptojs backend only) |
-| `VITE_EXPLORER_LINK` | `https://explorer.kairo.ag` | Block explorer base URL |
 | `VITE_AUTO_LOCK_MINUTES` | `15` | Auto-lock timeout in minutes |
+
+> **Note:** `VITE_API_BASE_URL` and `VITE_EXPLORER_LINK` are no longer needed. API and explorer URLs are now determined at runtime by the selected network (see [Network Configuration](#network-configuration)).
+
+---
+
+## Network Configuration
+
+The wallet supports three networks, selectable at runtime via a dropdown in the dashboard header:
+
+| Network | Dot Color | API URL | Explorer URL |
+| --- | --- | --- | --- |
+| Devnet | Blue | `https://api-devnet.kairo.ag/` | `https://lighthouse.devnet.cantonloop.com` |
+| Testnet | Yellow | `https://api-testnet.kairo.ag/` | `https://lighthouse.testnet.cantonloop.com` |
+| Mainnet | Green | `https://api.kairo.ag/` | `https://lighthouse.cantonloop.com` |
+
+Network selection is persisted in a global (non-namespaced) `chrome.storage.local` key. Switching networks clears the session (auth tokens, party ID) and returns the user to the Welcome/Unlock screen. Each network maintains its own isolated keystore and onboarding state.
 
 ---
 
@@ -121,7 +141,7 @@ Copy `.env.example` to `.env` and fill in values:
 │     BACKGROUND SERVICE WORKER        │  Holds encrypted key in chrome.storage.local.
 │  Decrypts key only when signing.     │  Signs transaction hashes.
 │  Makes all API calls.                │  Manages auth tokens.
-│  Auto-locks after timeout.           │  Key wiped from memory after use.
+│  Auto-locks after timeout.           │  Caches decrypted key in memory while unlocked.
 └──────────────────────────────────────┘
 ```
 
@@ -153,8 +173,17 @@ interface EncryptionProvider {
 
 | Store | API | Persistence | Contents |
 | --- | --- | --- | --- |
-| `chrome.storage.local` | `localStore` | Survives restart | Encrypted keystore, user profile, settings, onboarding flag |
+| `chrome.storage.local` (namespaced) | `localStore` | Survives restart | Encrypted keystore, user profile, settings, onboarding flag — prefixed with `{network}:{userId}:` or `{network}:` |
+| `chrome.storage.local` (global) | `networkStore` | Survives restart | Selected network ID (`selectedNetwork` key, not namespaced) |
 | `chrome.storage.session` | `sessionStore` | Memory-only | Auth tokens, party ID, lock state, last activity timestamp |
+
+**Storage key format:**
+
+- User-scoped keys (keystore, onboardingComplete): `{network}:{userId}:{key}` — e.g., `mainnet:abc123:keystore`
+- Network-scoped keys (user profile, settings): `{network}:{key}` — e.g., `devnet:user`
+- Global keys: `selectedNetwork` (no prefix)
+
+**Migrations:** On first load, legacy unnamespaced keys are automatically migrated to `devnet:*` prefixed keys. A second migration moves network-only-scoped user data to per-user keys.
 
 ### Message Protocol
 
@@ -164,8 +193,10 @@ All privileged operations go through typed messages (`lib/messaging/`). The popu
 | --- | --- | --- |
 | Auth | `GOOGLE_AUTH`, `REFRESH_TOKEN`, `LOGOUT`, `GET_AUTH_STATE` | `auth.handler.ts` |
 | Session | `UNLOCK`, `LOCK`, `GET_LOCK_STATE` | `session.handler.ts` |
-| Keystore | `CREATE_KEYPAIR`, `VALIDATE_IMPORT_KEY`, `COMPLETE_ONBOARDING`, `EXPORT_PRIVATE_KEY`, `DELETE_KEYSTORE` | `keystore.handler.ts` |
+| Keystore | `CREATE_KEYPAIR`, `VALIDATE_IMPORT_KEY`, `PREPARE_ONBOARDING`, `COMPLETE_ONBOARDING`, `EXPORT_PRIVATE_KEY`, `DELETE_KEYSTORE` | `keystore.handler.ts` |
 | Signing | `SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL`, `SIGN_AND_SUBMIT_TRANSFER_TOKEN_STANDARD`, `SIGN_AND_SUBMIT_APPROVE`, `SIGN_AND_SUBMIT_REJECT` | `signing.handler.ts` |
+| Network | `GET_NETWORK`, `SWITCH_NETWORK` | `network.handler.ts` |
+| Transfer pre-approval | `REGISTER_TRANSFER_PREAPPROVAL`, `GET_PREAPPROVAL_STATUS` | `keystore.handler.ts` |
 | API proxy | `FETCH_BALANCES`, `FETCH_PRICES`, `PREPARE_TRANSFER_*`, `FETCH_INCOMING_OFFERS`, `FETCH_OUTGOING_OFFERS`, `FETCH_HISTORY_OFFERS`, `PREPARE_APPROVE`, `PREPARE_REJECT`, `FETCH_ACTIVITY`, `FETCH_ABOUT_ME`, `REQUEST_FAUCET` | `api.handler.ts` |
 
 ### Signing Flow
@@ -194,15 +225,16 @@ canton-wallet/
 ├── assets/icons/                 # SVG icon components (Canton, CBTC, USDCx, etc.)
 │
 ├── entrypoints/
-│   ├── background.ts             # Service worker message router
+│   ├── background.ts             # Service worker: message router, network init, migrations
 │   ├── background/
-│   │   ├── api-client.ts         # Axios instance (Bearer from chrome.storage.session)
+│   │   ├── api-client.ts         # Axios instance with dynamic baseURL (setApiBaseUrl)
 │   │   ├── handlers/
 │   │   │   ├── auth.handler.ts       # Google OAuth, token refresh, logout
 │   │   │   ├── signing.handler.ts    # Key decrypt + transaction signing
-│   │   │   ├── keystore.handler.ts   # Key gen, import, encrypt, store
+│   │   │   ├── keystore.handler.ts   # Key gen, import, encrypt, store, onboarding, pre-approval
+│   │   │   ├── network.handler.ts    # Get/switch network, update API client + storage prefix
 │   │   │   ├── api.handler.ts        # Proxied API calls (balances, offers, etc.)
-│   │   │   └── session.handler.ts    # Lock/unlock, auto-lock timer
+│   │   │   └── session.handler.ts    # Lock/unlock, auto-lock timer, in-memory key cache
 │   │   └── encryption/
 │   │       ├── types.ts              # EncryptionProvider interface
 │   │       ├── webcrypto.ts          # PBKDF2 + AES-256-GCM
@@ -211,31 +243,32 @@ canton-wallet/
 │   │
 │   ├── popup/                    # Main wallet UI (400 x 600px)
 │   │   ├── main.tsx              # React root with QueryClient + ErrorBoundary
-│   │   ├── App.tsx               # State-machine navigation
+│   │   ├── App.tsx               # State-machine navigation (smart onboarding routing)
 │   │   ├── hooks/                # Typed hooks bridging popup ↔ background
 │   │   │   ├── useMessage.ts         # Generic sendMessage wrapper
 │   │   │   ├── useAuth.ts            # Auth state, Google sign-in, logout
 │   │   │   ├── useLockState.ts       # Lock/unlock state
-│   │   │   ├── useWallet.ts          # Key create, import, export, onboarding
+│   │   │   ├── useWallet.ts          # Key create, import, export, onboarding, pre-approval
 │   │   │   ├── useBalances.ts        # Token balances + prices (auto-refetch)
 │   │   │   ├── useTransfer.ts        # Transfer prepare + sign+submit
 │   │   │   ├── useOffers.ts          # Incoming/outgoing/history + approve/reject
-│   │   │   └── useActivity.ts        # Transaction history
+│   │   │   ├── useActivity.ts        # Transaction history
+│   │   │   └── useNetwork.ts         # Network state + switch mutation
 │   │   └── pages/
 │   │       ├── onboarding/
 │   │       │   ├── Welcome.tsx           # Google sign-in
-│   │       │   ├── CreatePassword.tsx    # Password with 5 validation rules
+│   │       │   ├── CreatePassword.tsx    # Password with 5 validation rules + reset button
 │   │       │   ├── KeySetup.tsx          # Create new or import existing
 │   │       │   ├── ShowPrivateKey.tsx    # Reveal, copy, backup warning
 │   │       │   ├── Acknowledgment.tsx    # 3 checkbox confirmations
-│   │       │   └── TypedConfirm.tsx      # Type exact confirmation phrase
+│   │       │   └── TypedConfirm.tsx      # Type confirmation → prepare/submit onboarding
 │   │       ├── Unlock.tsx               # Password entry for returning users
 │   │       └── dashboard/
-│   │           ├── index.tsx            # Tab container + bottom nav
-│   │           ├── Balances.tsx         # Token balances (locked/unlocked)
-│   │           ├── Transfer.tsx         # 3-step: form → confirm → success
+│   │           ├── index.tsx            # Tab container + network dropdown + account info
+│   │           ├── Balances.tsx         # Token balances + pre-approval banner
+│   │           ├── Transfer.tsx         # 3-step: form → confirm → success (with balance/MAX)
 │   │           ├── Settings.tsx         # PartyId, export key, lock, logout
-│   │           ├── Activity.tsx         # Paginated tx history
+│   │           ├── Activity.tsx         # Paginated tx history (dynamic explorer links)
 │   │           └── offers/
 │   │               ├── index.tsx        # Incoming/Outgoing/History tabs
 │   │               ├── IncomingTab.tsx  # Approve/reject with password
@@ -244,9 +277,10 @@ canton-wallet/
 │   │
 │   └── options/                  # Full-tab settings page
 │       ├── main.tsx
-│       └── App.tsx               # Key export, encryption info, about
+│       └── App.tsx               # Key export (Base64/Hex), encryption info, about (dynamic network)
 │
 ├── lib/                          # Shared code (popup + background)
+│   ├── network.ts                # NetworkId type, NetworkConfig, NETWORKS record
 │   ├── messaging/
 │   │   ├── constants.ts          # MSG action string constants
 │   │   ├── types.ts              # Discriminated union request/response types
@@ -254,8 +288,9 @@ canton-wallet/
 │   │   └── index.ts
 │   ├── storage/
 │   │   ├── schemas.ts            # Zod validation schemas
-│   │   ├── local.ts              # Typed chrome.storage.local wrapper
+│   │   ├── local.ts              # Namespaced chrome.storage.local wrapper + migrations
 │   │   ├── session.ts            # Typed chrome.storage.session wrapper
+│   │   ├── network.ts            # Global network selection store (non-namespaced)
 │   │   └── index.ts
 │   ├── types/                    # Shared API types (ported from web app)
 │   │   ├── api.ts                # ApiResponse<T>, PaginatedResponse<T>
@@ -267,7 +302,7 @@ canton-wallet/
 │   │   └── index.ts
 │   ├── constants.ts              # Token defs, query keys, TYPO_TEXT
 │   ├── format.ts                 # Currency/address/date formatting
-│   └── utils.ts                  # cn(), sleep(), onCopyText(), base64/hex
+│   └── utils.ts                  # cn(), sleep(), onCopyText(), base64/hex conversion
 │
 ├── components/
 │   └── common/
@@ -282,7 +317,7 @@ canton-wallet/
 
 ## Shared Backend API
 
-The extension talks to the **same backend** as `canton-exchange-frontend` at `VITE_API_BASE_URL`. All endpoints, request/response shapes, and auth mechanisms are identical.
+The extension talks to the **same backend** as `canton-exchange-frontend`. The API URL is determined dynamically by the selected network (see [Network Configuration](#network-configuration)).
 
 | Area | Endpoints |
 | --- | --- |
@@ -306,11 +341,26 @@ The extension talks to the **same backend** as `canton-exchange-frontend` at `VI
 ```text
 Welcome → Google sign-in
   → CreatePassword (8+ chars, upper, lower, digit, special)
-  → KeySetup (create new or import existing)
+  → KeySetup (auto-generate key pair)
   → ShowPrivateKey (reveal, copy, backup)
   → Acknowledgment (3 checkbox confirmations)
   → TypedConfirm (type exact confirmation phrase)
-  → Background: encrypt key → onboarding prepare/sign/submit → auto-approval → faucet
+  → Background: encrypt key → onboarding prepare/sign/submit
+  → Background: fetch partyId from /auth/me → auto-register transfer pre-approval
+  → Background: request faucet
+  → Dashboard
+```
+
+### Onboarding (Returning User with Existing Key)
+
+If `/auth/me` returns a user with an existing `publicKey` (even if `onboardingStatus=PENDING`), the wallet detects this and routes directly to key import instead of generating a new key pair.
+
+```text
+Welcome → Google sign-in
+  → CreatePassword
+  → KeySetup (import existing private key — public key pre-filled from backend)
+  → Acknowledgment
+  → TypedConfirm → onboarding submit → auto-register pre-approval
   → Dashboard
 ```
 
@@ -323,11 +373,15 @@ Welcome → Google sign-in → Unlock (password) → Dashboard
 ### Transfer
 
 ```text
-Dashboard → Send tab → Select token + recipient + amount
+Dashboard → Send tab → Select token (shows available/locked balance) + recipient + amount (MAX button)
   → IF Amulet: PREPARE_TRANSFER_PREAPPROVAL
   → IF CBTC/USDCx: PREPARE_TRANSFER_TOKEN_STANDARD
   → Enter password → SIGN_AND_SUBMIT → Success
 ```
+
+### Transfer Pre-Approval
+
+Transfer pre-approval is required to receive Amulet transfers. It is automatically registered after onboarding. If missing (e.g., onboarding occurred before this feature), a yellow warning banner appears on the Balances tab with a manual registration button. A green success toast is shown for 5 seconds after successful registration.
 
 ### Offer Approval
 
@@ -335,6 +389,15 @@ Dashboard → Send tab → Select token + recipient + amount
 Dashboard → Offers tab → Incoming
   → Approve or Reject → PREPARE_APPROVE/REJECT
   → Enter password → SIGN_AND_SUBMIT_APPROVE/REJECT → Updated
+```
+
+### Network Switching
+
+```text
+Dashboard → Header network dropdown (colored dot: blue/yellow/green)
+  → Select different network
+  → Session cleared → App returns to Welcome/Unlock for the new network
+  → Previous network's data preserved in isolated storage
 ```
 
 ---
@@ -352,10 +415,12 @@ Dashboard → Offers tab → Incoming
 ## Security Notes
 
 - **Key isolation**: Private keys exist only in the background service worker. The popup never has access.
+- **In-memory key caching**: During an unlocked session, the decrypted private key is cached in the service worker's memory for passwordless operations (auto-approval registration). The cache is cleared on lock/logout.
 - **Auto-clear**: Exported private keys are automatically cleared from UI state after 30 seconds.
 - **Onboarding wipe**: Password and key data are cleared from React state immediately after onboarding completes.
-- **Auto-lock**: Wallet locks after configurable timeout (default 15 min). All session data is wiped.
+- **Auto-lock**: Wallet locks after configurable timeout (default 15 min). All session data and cached keys are wiped.
 - **No localStorage**: Auth tokens use `chrome.storage.session` (memory-only, cleared on browser close).
+- **Per-user isolation**: Keystores are scoped by `{network}:{userId}:keystore`, preventing data leaks between accounts or networks.
 - **Error boundary**: React ErrorBoundary wraps both popup and options page to prevent crash-induced state leaks.
 - **No XSS vectors**: No use of `dangerouslySetInnerHTML`, `eval`, or dynamic script injection.
 
