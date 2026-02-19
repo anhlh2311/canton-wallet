@@ -1,17 +1,21 @@
 import { useState } from 'react';
-import { EyeIcon, EyeOffIcon, Loader2Icon, LockIcon } from 'lucide-react';
+import { EyeIcon, EyeOffIcon, Loader2Icon, LockIcon, LogOutIcon } from 'lucide-react';
 import { useUnlock } from '../hooks/useLockState';
+import { useAuthState, useLogout } from '../hooks/useAuth';
 import { IconLogo } from '@assets/icons/icon-logo';
 
 interface Props {
   onSuccess: () => void;
+  onLogout: () => void;
 }
 
-export function Unlock({ onSuccess }: Props) {
+export function Unlock({ onSuccess, onLogout }: Props) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const unlock = useUnlock();
+  const logout = useLogout();
+  const { data: authState } = useAuthState();
 
   const handleUnlock = async () => {
     if (!password) return;
@@ -35,6 +39,16 @@ export function Unlock({ onSuccess }: Props) {
         <p className="text-sm text-muted-foreground text-center">
           Enter your password to unlock
         </p>
+        {authState?.user?.email && (
+          <div className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-1.5 mt-1">
+            <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+              {authState.user.email[0].toUpperCase()}
+            </div>
+            <p className="text-sm font-medium text-foreground truncate">
+              {authState.user.email}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="w-full space-y-3">
@@ -69,6 +83,18 @@ export function Unlock({ onSuccess }: Props) {
           ) : (
             'Unlock'
           )}
+        </button>
+
+        <button
+          onClick={async () => {
+            await logout.mutateAsync();
+            onLogout();
+          }}
+          disabled={logout.isPending}
+          className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-2 disabled:opacity-40"
+        >
+          <LogOutIcon className="w-4 h-4" />
+          Sign in with a different account
         </button>
       </div>
     </div>

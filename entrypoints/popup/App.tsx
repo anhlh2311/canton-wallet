@@ -218,7 +218,15 @@ function App() {
       );
 
     case 'unlock':
-      return <Unlock onSuccess={() => setScreen('dashboard')} />;
+      return (
+        <Unlock
+          onSuccess={() => setScreen('dashboard')}
+          onLogout={() => {
+            clearOnboarding();
+            setScreen('welcome');
+          }}
+        />
+      );
 
     case 'dashboard':
       return (
