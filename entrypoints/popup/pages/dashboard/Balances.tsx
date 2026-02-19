@@ -14,6 +14,9 @@ const TOKEN_ICONS: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
   USDCx: IconUSDC,
 };
 
+/** Fixed display order: Amulet first, then CBTC, then USDCx, then any unknown tokens. */
+const TOKEN_ORDER: Record<string, number> = { Amulet: 0, CBTC: 1, USDCx: 2 };
+
 export function Balances() {
   const { data, isLoading, error, refetch } = useBalances();
   const { data: preapprovalData, isLoading: preapprovalLoading } = usePreapprovalStatus();
@@ -38,7 +41,11 @@ export function Balances() {
     return () => clearTimeout(timer);
   }, [showSuccess]);
 
-  const balances = data?.balances ?? [];
+  const balances = [...(data?.balances ?? [])].sort((a, b) => {
+    const orderA = TOKEN_ORDER[a.instrumentId?.id ?? ''] ?? 99;
+    const orderB = TOKEN_ORDER[b.instrumentId?.id ?? ''] ?? 99;
+    return orderA - orderB;
+  });
   const showPreapprovalBanner =
     !preapprovalLoading &&
     !registerPreapproval.isSuccess &&
