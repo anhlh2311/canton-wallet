@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useBalances } from '../../hooks/useBalances';
 import { usePreapprovalStatus, useRegisterPreapproval } from '../../hooks/useWallet';
-import { Loader2Icon, AlertCircleIcon, ShieldCheckIcon, CheckCircle2Icon } from 'lucide-react';
+import { Loader2Icon, AlertCircleIcon, ShieldCheckIcon, CheckCircle2Icon, ChevronRightIcon } from 'lucide-react';
 import { IconCanton } from '@assets/icons/icon-canton';
 import { IconCBTCCoin } from '@assets/icons/icon-yield-coin';
 import { IconUSDC } from '@assets/icons/icon-usdc';
 import { IconDefaultToken } from '@assets/icons/icon-default-token';
+import { TokenDetail } from './TokenDetail';
+import type { BalanceSwapResponse } from '@lib/types';
 import BigNumber from 'bignumber.js';
 
 const TOKEN_ICONS: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
@@ -23,6 +25,7 @@ export function Balances() {
   const registerPreapproval = useRegisterPreapproval();
   const [preapprovalError, setPreapprovalError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<BalanceSwapResponse | null>(null);
 
   const handleRegisterPreapproval = async () => {
     setPreapprovalError('');
@@ -50,6 +53,10 @@ export function Balances() {
     !preapprovalLoading &&
     !registerPreapproval.isSuccess &&
     (!preapprovalData || !preapprovalData.hasPreapproval);
+
+  if (selectedToken) {
+    return <TokenDetail balance={selectedToken} onBack={() => setSelectedToken(null)} />;
+  }
 
   return (
     <div className="p-4 space-y-3">
@@ -116,9 +123,10 @@ export function Balances() {
           const total = new BigNumber(b.unlocked ?? '0').plus(b.locked ?? '0');
 
           return (
-            <div
+            <button
               key={tokenId}
-              className="rounded-xl bg-secondary p-4 flex items-center gap-3"
+              onClick={() => setSelectedToken(b)}
+              className="w-full rounded-xl bg-secondary p-4 flex items-center gap-3 hover:bg-secondary/80 transition-colors text-left"
             >
               <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-background">
                 <Icon className="w-8 h-8" />
@@ -137,7 +145,8 @@ export function Balances() {
                   </p>
                 )}
               </div>
-            </div>
+              <ChevronRightIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+            </button>
           );
         })
       )}

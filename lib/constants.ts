@@ -12,26 +12,27 @@ export const queryKey = {
   HISTORY_REQUESTS: 'HISTORY_REQUESTS',
 } as const;
 
+// Daml Decimal type = Numeric 10 → 10 digits after the decimal point
 export const SUPPORTED_TOKENS = [
   {
     id: 'Amulet',
     symbol: 'CC',
     chainName: 'Canton Coin',
-    decimal: 5,
+    decimal: 10,
     minAmount: '10',
   },
   {
     id: 'CBTC',
     symbol: 'CBTC',
     chainName: 'Canton Bitcoin',
-    decimal: 8,
+    decimal: 10,
     minAmount: '0.00001',
   },
   {
     id: 'USDCx',
     symbol: 'USDCx',
     chainName: 'Canton USD Coin',
-    decimal: 5,
+    decimal: 10,
     minAmount: '1',
   },
 ] as const;

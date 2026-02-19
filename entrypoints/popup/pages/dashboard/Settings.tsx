@@ -38,7 +38,7 @@ export function Settings({ onBack, onLock, onLogout }: Props) {
   const [copiedParty, setCopiedParty] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [error, setError] = useState('');
-  const keyTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const keyTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   const partyId = authState?.partyId ?? '';
 

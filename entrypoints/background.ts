@@ -1,3 +1,4 @@
+import { defineBackground } from 'wxt/utils/define-background';
 import { MSG } from '@lib/messaging';
 import { err } from '@lib/messaging/protocol';
 import type { MessageRequest } from '@lib/messaging/types';

@@ -61,7 +61,7 @@ function ExportKeySection() {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const keyTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const keyTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   // Auto-clear private key from memory after timeout
   useEffect(() => {
