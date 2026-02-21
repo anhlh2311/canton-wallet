@@ -82,7 +82,7 @@ export async function handleCompleteOnboarding(payload: {
     bundle.walletKey = publicKey;
     await localStore.set('keystore', bundle);
 
-    // Import signing lib (needed for both onboarding and auto-approval)
+    // Import signing lib (needed for both onboarding and transfer preapproval)
     const { signTransactionHash, getPublicKeyFromPrivate } = await import(
       '@canton-network/core-signing-lib'
     );
@@ -112,56 +112,46 @@ export async function handleCompleteOnboarding(payload: {
 
     // Re-fetch partyId from backend (it may have been assigned during onboarding submit)
     let partyId = await sessionStore.get('partyId');
-    console.log('[Canton Wallet] Auto-approval: partyId from session =', partyId);
+    console.log('[Canton Wallet] Transfer preapproval: partyId from session =', partyId);
     if (!partyId) {
       try {
         const { data: meData } = await apiClient.get('/auth/me');
         partyId = meData.data?.party?.partyId ?? null;
-        console.log('[Canton Wallet] Auto-approval: partyId from /auth/me =', partyId);
+        console.log('[Canton Wallet] Transfer preapproval: partyId from /auth/me =', partyId);
         if (partyId) await sessionStore.set('partyId', partyId);
       } catch (e) {
-        console.warn('[Canton Wallet] Auto-approval: failed to fetch partyId', e);
+        console.warn('[Canton Wallet] Transfer preapproval: failed to fetch partyId', e);
       }
     }
 
-    // Set up auto-approval: prepare → sign → submit (both new and existing users)
+    // Set up transfer preapproval: prepare → sign → submit (both new and existing users)
     if (partyId) {
       try {
-        console.log('[Canton Wallet] Auto-approval: preparing for partyId =', partyId);
-        const { data: autoData } = await apiClient.post(
-          '/auto-approval/prepare',
+        console.log('[Canton Wallet] Transfer preapproval: preparing for partyId =', partyId);
+        const { data: prepareData } = await apiClient.post(
+          '/transfer-preapproval/prepare',
           { partyId },
         );
-        console.log('[Canton Wallet] Auto-approval: prepare response =', autoData);
-        const autoSig = signTransactionHash(
-          autoData.data.preparedTransactionHash,
+        console.log('[Canton Wallet] Transfer preapproval: prepare response =', prepareData);
+        const sig = signTransactionHash(
+          prepareData.data.preparedTransactionHash,
           privateKey,
         );
         const derivedPublicKey = getPublicKeyFromPrivate(privateKey);
-        await apiClient.post('/auto-approval/submit', {
-          contractId: autoData.data.contractId,
+        await apiClient.post('/transfer-preapproval/submit', {
+          commandId: prepareData.data.commandId,
           publicKey: derivedPublicKey,
-          signature: autoSig,
-          preparedTransaction: autoData.data.preparedTransaction,
+          signature: sig,
+          preparedTransaction: prepareData.data.preparedTransaction,
+          preparedTransactionHash: prepareData.data.preparedTransactionHash,
           partyId,
         });
-        console.log('[Canton Wallet] Auto-approval: submitted successfully');
+        console.log('[Canton Wallet] Transfer preapproval: submitted successfully');
       } catch (e) {
-        console.warn('[Canton Wallet] Auto-approval: failed', e);
+        console.warn('[Canton Wallet] Transfer preapproval: failed', e);
       }
     } else {
-      console.warn('[Canton Wallet] Auto-approval: skipped — no partyId available');
-    }
-
-    // Request faucet (best-effort)
-    try {
-      const faucetPartyId = partyId || (await sessionStore.get('partyId'));
-      if (faucetPartyId) {
-        console.log('[Canton Wallet] Requesting faucet for partyId =', faucetPartyId);
-        await apiClient.post('/external-party/request-faucet', { partyId: faucetPartyId });
-      }
-    } catch (e) {
-      console.warn('[Canton Wallet] Faucet request failed', e);
+      console.warn('[Canton Wallet] Transfer preapproval: skipped — no partyId available');
     }
 
     // Cache the private key in memory so dashboard features (like preapproval) work without re-entering password
@@ -220,7 +210,7 @@ export async function handleRegisterTransferPreapproval(): Promise<
     );
 
     const { data: prepareRes } = await apiClient.post(
-      '/auto-approval/prepare',
+      '/transfer-preapproval/prepare',
       { partyId },
     );
     const signature = signTransactionHash(
@@ -228,11 +218,12 @@ export async function handleRegisterTransferPreapproval(): Promise<
       privateKey,
     );
     const publicKey = getPublicKeyFromPrivate(privateKey);
-    await apiClient.post('/auto-approval/submit', {
-      contractId: prepareRes.data.contractId,
+    await apiClient.post('/transfer-preapproval/submit', {
+      commandId: prepareRes.data.commandId,
       publicKey,
       signature,
       preparedTransaction: prepareRes.data.preparedTransaction,
+      preparedTransactionHash: prepareRes.data.preparedTransactionHash,
       partyId,
     });
 
@@ -251,9 +242,10 @@ export async function handleGetPreapprovalStatus(): Promise<
     const partyId = await sessionStore.get('partyId');
     if (!partyId) return ok({ hasPreapproval: false });
 
-    const { data: res } = await apiClient.get(`/auto-approval/${partyId}`);
-    // If the API returns data, the user has an active preapproval (same check as canton-exchange-frontend)
-    const hasPreapproval = !!res.data;
+    const { data: res } = await apiClient.get(`/transfer-preapproval/status`, {
+      params: { partyId },
+    });
+    const hasPreapproval = !!res.data?.exists;
 
     return ok({ hasPreapproval });
   } catch {
