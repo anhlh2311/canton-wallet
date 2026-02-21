@@ -4,6 +4,7 @@ import { ArrowLeftIcon, CheckIcon } from 'lucide-react';
 interface Props {
   onNext: () => void;
   onBack: () => void;
+  isLocalnet?: boolean;
 }
 
 const CHECKS = [
@@ -12,8 +13,8 @@ const CHECKS = [
   'I understand that anyone who has my private key can access my funds.',
 ];
 
-export function Acknowledgment({ onNext, onBack }: Props) {
-  const [checked, setChecked] = useState<boolean[]>(CHECKS.map(() => false));
+export function Acknowledgment({ onNext, onBack, isLocalnet }: Props) {
+  const [checked, setChecked] = useState<boolean[]>(CHECKS.map(() => isLocalnet ?? false));
 
   const allChecked = checked.every(Boolean);
 

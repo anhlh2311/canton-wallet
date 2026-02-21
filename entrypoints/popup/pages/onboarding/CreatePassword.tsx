@@ -4,6 +4,7 @@ import { EyeIcon, EyeOffIcon, LogOutIcon } from 'lucide-react';
 interface Props {
   onNext: (password: string) => void;
   onReset: () => void;
+  isLocalnet?: boolean;
 }
 
 const PASSWORD_RULES = [
@@ -14,14 +15,14 @@ const PASSWORD_RULES = [
   { label: 'Special character', test: (p: string) => /[!@#$%^&*(),.?":{}|<>]/.test(p) },
 ];
 
-export function CreatePassword({ onNext, onReset }: Props) {
+export function CreatePassword({ onNext, onReset, isLocalnet }: Props) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const allRulesPassed = PASSWORD_RULES.every((r) => r.test(password));
-  const passwordsMatch = password === confirm && confirm.length > 0;
+  const allRulesPassed = isLocalnet || PASSWORD_RULES.every((r) => r.test(password));
+  const passwordsMatch = isLocalnet ? password === confirm : password === confirm && confirm.length > 0;
   const canProceed = allRulesPassed && passwordsMatch;
 
   return (

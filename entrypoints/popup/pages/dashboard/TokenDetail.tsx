@@ -1,4 +1,5 @@
-import { ArrowLeftIcon, LockIcon, UnlockIcon, ClockIcon } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeftIcon, LockIcon, UnlockIcon, ClockIcon, DropletsIcon } from 'lucide-react';
 import { IconCanton } from '@assets/icons/icon-canton';
 import { IconCBTCCoin } from '@assets/icons/icon-yield-coin';
 import { IconUSDC } from '@assets/icons/icon-usdc';
@@ -6,6 +7,8 @@ import { IconDefaultToken } from '@assets/icons/icon-default-token';
 import { SUPPORTED_TOKENS } from '@lib/constants';
 import { format } from '@lib/format';
 import type { BalanceSwapResponse } from '@lib/types';
+import { useNetwork } from '../../hooks/useNetwork';
+import { useFaucet } from '../../hooks/useFaucet';
 import BigNumber from 'bignumber.js';
 
 const TOKEN_ICONS: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
@@ -20,6 +23,10 @@ interface Props {
 }
 
 export function TokenDetail({ balance, onBack }: Props) {
+  const { config: networkConfig } = useNetwork();
+  const { requestFaucet, loading: faucetLoading, error: faucetError } = useFaucet();
+  const [faucetSuccess, setFaucetSuccess] = useState(false);
+
   const tokenId = balance.instrumentId?.id ?? 'Unknown';
   const Icon = TOKEN_ICONS[tokenId] ?? IconDefaultToken;
   const tokenMeta = SUPPORTED_TOKENS.find((t) => t.id === tokenId);
@@ -128,6 +135,36 @@ export function TokenDetail({ balance, onBack }: Props) {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Faucet — shown for Amulet on faucet-enabled networks */}
+        {tokenId === 'Amulet' && networkConfig?.faucetEnabled && (
+          <div className="rounded-xl bg-secondary p-4 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Faucet
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Request test Amulet tokens on {networkConfig.label}.
+            </p>
+            <button
+              onClick={async () => {
+                setFaucetSuccess(false);
+                const ok = await requestFaucet();
+                if (ok) setFaucetSuccess(true);
+              }}
+              disabled={faucetLoading}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              <DropletsIcon className="w-4 h-4" />
+              {faucetLoading ? 'Requesting...' : 'Request Amulet'}
+            </button>
+            {faucetSuccess && (
+              <p className="text-xs text-green-400 text-center">Faucet request sent!</p>
+            )}
+            {faucetError && (
+              <p className="text-xs text-red-400 text-center">{faucetError}</p>
+            )}
           </div>
         )}
       </div>
