@@ -229,11 +229,53 @@ export const NETWORKS = {
 
 ---
 
-## Recommendation
+## Approach C: Backend Config Endpoint (Future Improvement)
 
-**Start with Approach A.** It delivers the feature with minimal effort by reusing the existing architecture. The wallet already does prepare → sign → submit for transfers — faucet is just another exercise command following the same pattern.
+Instead of hardcoding Canton API URLs in the wallet's `lib/network.ts`, the backend could expose a single endpoint that returns both the Canton JWT **and** the Canton API URLs:
 
-Approach B can be revisited later if there's a broader need for direct Canton API access from the wallet (e.g., querying holdings, contract state, or other ledger operations without backend involvement).
+### Endpoint
+
+```
+GET /auth/canton-config
+Authorization: Bearer <backend-jwt>
+
+Response:
+{
+  "cantonToken": "<Canton JWT>",
+  "validatorToken": "<Validator JWT>",
+  "userId": "<Canton admin user>",
+  "ledgerUrl": "<Participant Ledger API URL>",
+  "validatorUrl": "<Validator API URL>",
+  "faucetEnabled": true
+}
+```
+
+### Benefits
+
+- **No hardcoded infrastructure URLs** — the wallet only needs the backend API URL per network
+- **Single source of truth** — Canton API URLs are configured only in the backend's `.env`
+- **Easier multi-environment support** — adding a new environment doesn't require a wallet code change
+- **Dynamic faucet availability** — backend can enable/disable faucet based on runtime config
+
+### Implementation
+
+1. Backend: new method on `CantonClientService` that returns URLs from its config
+2. Backend: new endpoint `GET /auth/canton-config` protected by `JwtAuthGuard`
+3. Wallet: fetch config on demand (or cache it), remove hardcoded `cantonLedgerUrl`/`cantonValidatorUrl` from `NetworkConfig`
+
+### When to implement
+
+When the number of environments grows beyond 4, or when Canton API URLs change frequently across deployments. Currently, hardcoded URLs in `lib/network.ts` are simpler and work for localnet + devnet.
+
+---
+
+## Current Implementation Status
+
+**Implemented:** Hybrid approach using `@canton-network/wallet-sdk` (branch `core/use-wallet-sdk`)
+- Backend provides Canton JWT via `GET /auth/canton-access-token`
+- Canton API URLs hardcoded per network in `lib/network.ts`
+- `TokenStandardController.createTap()` + `LedgerController.prepareSignAndExecuteTransaction()`
+- UI: faucet section on Amulet Token Detail when `config.faucetEnabled` is true (Localnet + Devnet)
 
 ## References
 
