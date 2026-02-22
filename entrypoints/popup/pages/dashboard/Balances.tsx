@@ -44,11 +44,24 @@ export function Balances() {
     return () => clearTimeout(timer);
   }, [showSuccess]);
 
-  const balances = [...(data?.balances ?? [])].sort((a, b) => {
-    const orderA = TOKEN_ORDER[a.instrumentId?.id ?? ''] ?? 99;
-    const orderB = TOKEN_ORDER[b.instrumentId?.id ?? ''] ?? 99;
-    return orderA - orderB;
-  });
+  const balances = (() => {
+    const fetched = [...(data?.balances ?? [])];
+    // Always show Amulet so new users can access the faucet
+    const hasAmulet = fetched.some((b) => b.instrumentId?.id === 'Amulet');
+    if (!hasAmulet) {
+      fetched.push({
+        instrumentId: { id: 'Amulet', admin: '' },
+        unlocked: '0',
+        locked: '0',
+        lockedDetails: [],
+      });
+    }
+    return fetched.sort((a, b) => {
+      const orderA = TOKEN_ORDER[a.instrumentId?.id ?? ''] ?? 99;
+      const orderB = TOKEN_ORDER[b.instrumentId?.id ?? ''] ?? 99;
+      return orderA - orderB;
+    });
+  })();
   const showPreapprovalBanner =
     !preapprovalLoading &&
     !registerPreapproval.isSuccess &&
@@ -111,10 +124,6 @@ export function Balances() {
           <button onClick={() => refetch()} className="text-xs text-primary hover:underline">
             Retry
           </button>
-        </div>
-      ) : balances.length === 0 ? (
-        <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
-          No token balances found
         </div>
       ) : (
         balances.map((b) => {

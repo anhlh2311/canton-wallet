@@ -5,11 +5,14 @@ export function useFaucet() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function requestFaucet(): Promise<boolean> {
+  async function requestFaucet(password: string, amount: string): Promise<boolean> {
     setLoading(true);
     setError(null);
     try {
-      const response = await chrome.runtime.sendMessage({ action: MSG.REQUEST_FAUCET });
+      const response = await chrome.runtime.sendMessage({
+        action: MSG.REQUEST_FAUCET,
+        payload: { password, amount },
+      });
       if (response?.success) {
         return true;
       }

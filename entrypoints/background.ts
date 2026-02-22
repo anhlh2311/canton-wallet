@@ -164,7 +164,7 @@ async function routeMessage(message: MessageRequest) {
     case MSG.FETCH_ABOUT_ME:
       return handleFetchAboutMe();
     case MSG.REQUEST_FAUCET:
-      return handleRequestFaucet();
+      return handleRequestFaucet(message.payload.password, message.payload.amount);
 
     default:
       return err(`Unknown action: ${(message as { action: string }).action}`);

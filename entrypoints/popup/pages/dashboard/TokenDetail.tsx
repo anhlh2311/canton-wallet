@@ -26,6 +26,8 @@ export function TokenDetail({ balance, onBack }: Props) {
   const { config: networkConfig } = useNetwork();
   const { requestFaucet, loading: faucetLoading, error: faucetError } = useFaucet();
   const [faucetSuccess, setFaucetSuccess] = useState(false);
+  const [faucetPassword, setFaucetPassword] = useState('');
+  const [faucetAmount, setFaucetAmount] = useState('10');
 
   const tokenId = balance.instrumentId?.id ?? 'Unknown';
   const Icon = TOKEN_ICONS[tokenId] ?? IconDefaultToken;
@@ -145,19 +147,39 @@ export function TokenDetail({ balance, onBack }: Props) {
               Faucet
             </p>
             <p className="text-xs text-muted-foreground">
-              Request test Amulet tokens on {networkConfig.label}.
+              Request test Amulet tokens on {networkConfig.label} (max 10,000).
             </p>
+            <input
+              type="number"
+              placeholder="Amount"
+              min="0.00001"
+              max="10000"
+              step="any"
+              value={faucetAmount}
+              onChange={(e) => setFaucetAmount(e.target.value)}
+              className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <input
+              type="password"
+              placeholder="Enter password to sign"
+              value={faucetPassword}
+              onChange={(e) => setFaucetPassword(e.target.value)}
+              className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
             <button
               onClick={async () => {
                 setFaucetSuccess(false);
-                const ok = await requestFaucet();
-                if (ok) setFaucetSuccess(true);
+                const ok = await requestFaucet(faucetPassword, faucetAmount);
+                if (ok) {
+                  setFaucetSuccess(true);
+                  setFaucetPassword('');
+                }
               }}
-              disabled={faucetLoading}
+              disabled={faucetLoading || !faucetPassword || !faucetAmount || Number(faucetAmount) <= 0 || Number(faucetAmount) > 10000}
               className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               <DropletsIcon className="w-4 h-4" />
-              {faucetLoading ? 'Requesting...' : 'Request Amulet'}
+              {faucetLoading ? 'Requesting...' : `Request ${faucetAmount || '0'} Amulet`}
             </button>
             {faucetSuccess && (
               <p className="text-xs text-green-400 text-center">Faucet request sent!</p>

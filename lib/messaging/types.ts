@@ -123,7 +123,7 @@ export type MessageRequest =
       payload: { page: number; limit: number };
     }
   | { action: typeof MSG.FETCH_ABOUT_ME }
-  | { action: typeof MSG.REQUEST_FAUCET };
+  | { action: typeof MSG.REQUEST_FAUCET; payload: { password: string; amount: string } };
 
 // ── Response types ──
 

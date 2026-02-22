@@ -14,7 +14,7 @@ import type {
   GetIncomingRequestsQuery,
   GetHistoryRequestsQuery,
 } from '@lib/types';
-import { sessionStore } from '@lib/storage';
+import { localStore, sessionStore } from '@lib/storage';
 import apiClient from '../api-client';
 
 export async function handleFetchBalances(): Promise<
@@ -24,7 +24,7 @@ export async function handleFetchBalances(): Promise<
     const partyId = await sessionStore.get('partyId');
     if (!partyId) return err('No party ID');
 
-    const { data } = await apiClient.get('/swap/token-balance', {
+    const { data } = await apiClient.get('/wallet/token-balance', {
       params: { partyId },
     });
 
@@ -38,7 +38,7 @@ export async function handleFetchPrices(): Promise<
   MessageResponse<PricesData>
 > {
   try {
-    const { data } = await apiClient.get('/swap/token-prices');
+    const { data } = await apiClient.get('/wallet/token-prices');
     return ok({ prices: data.data });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Failed to fetch prices');
@@ -205,14 +205,46 @@ export async function handleFetchAboutMe(): Promise<
   }
 }
 
-export async function handleRequestFaucet(): Promise<
-  MessageResponse<{ success: boolean }>
-> {
+export async function handleRequestFaucet(
+  password: string,
+  amount: string,
+): Promise<MessageResponse<{ success: boolean }>> {
   try {
     const partyId = await sessionStore.get('partyId');
     if (!partyId) return err('No party ID');
 
-    await apiClient.post('/external-party/request-faucet', { partyId });
+    // Step 1: Prepare the faucet tap (returns preparedTransaction + hash)
+    const { data: prepareResp } = await apiClient.post(
+      '/external-party/devnet-tap/prepare',
+      { partyId, amount },
+    );
+    const prepared = prepareResp.data;
+    if (!prepared?.preparedTransactionHash || !prepared?.preparedTransaction) {
+      return err('Faucet prepare returned invalid data');
+    }
+
+    // Step 2: Decrypt private key and sign the transaction hash
+    const keystore = await localStore.get('keystore');
+    if (!keystore) return err('No keystore found');
+    const { getEncryptionProvider } = await import('../encryption');
+    const provider = await getEncryptionProvider();
+    const privateKey = await provider.decryptKey(keystore, password);
+
+    const { signTransactionHash } = await import(
+      '@canton-network/core-signing-lib'
+    );
+    const signature = signTransactionHash(
+      prepared.preparedTransactionHash,
+      privateKey,
+    );
+
+    // Step 3: Submit the signed transaction
+    await apiClient.post('/external-party/devnet-tap/submit', {
+      preparedTransaction: prepared.preparedTransaction,
+      signature,
+      partyId,
+    });
+
     return ok({ success: true });
   } catch (e: unknown) {
     return err(e instanceof Error ? e.message : 'Faucet request failed');
