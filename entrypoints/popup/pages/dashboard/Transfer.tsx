@@ -135,9 +135,9 @@ export function Transfer() {
             <span className="text-muted-foreground">Amount</span>
             <span className="text-foreground">{amount}</span>
           </div>
-          <div className="flex justify-between">
+          <div className="flex flex-col gap-1 pt-1">
             <span className="text-muted-foreground">Recipient</span>
-            <span className="text-foreground text-xs break-all">{recipient}</span>
+            <span className="text-foreground text-xs font-mono break-all bg-background rounded-lg px-2 py-1.5">{recipient}</span>
           </div>
         </div>
 

@@ -1,4 +1,4 @@
-export type NetworkId = 'devnet' | 'testnet' | 'mainnet';
+export type NetworkId = 'localnet' | 'devnet' | 'testnet' | 'mainnet';
 
 export interface NetworkConfig {
   id: NetworkId;
@@ -8,6 +8,12 @@ export interface NetworkConfig {
 }
 
 export const NETWORKS: Record<NetworkId, NetworkConfig> = {
+  localnet: {
+    id: 'localnet',
+    label: 'Localnet',
+    apiBaseUrl: 'http://localhost:3003/',
+    explorerUrl: '',
+  },
   devnet: {
     id: 'devnet',
     label: 'Devnet',

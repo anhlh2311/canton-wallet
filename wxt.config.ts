@@ -16,6 +16,7 @@ export default defineConfig({
     host_permissions: [
       'https://accounts.google.com/*',
       'https://*.kairo.ag/*',
+      'http://localhost/*',
     ],
   },
   imports: false,

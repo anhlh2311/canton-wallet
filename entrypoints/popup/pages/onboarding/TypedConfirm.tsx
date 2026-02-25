@@ -11,10 +11,11 @@ interface Props {
   preparedParty: OnboardingPrepareData | null;
   onSuccess: () => void;
   onBack: () => void;
+  isLocalnet?: boolean;
 }
 
-export function TypedConfirm({ password, privateKey, publicKey, preparedParty, onSuccess, onBack }: Props) {
-  const [typed, setTyped] = useState('');
+export function TypedConfirm({ password, privateKey, publicKey, preparedParty, onSuccess, onBack, isLocalnet }: Props) {
+  const [typed, setTyped] = useState(isLocalnet ? TYPO_TEXT : '');
   const [error, setError] = useState('');
   const completeOnboarding = useCompleteOnboarding();
 

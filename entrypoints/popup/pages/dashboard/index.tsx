@@ -12,6 +12,7 @@ import { NETWORK_IDS, NETWORKS, type NetworkId } from '@lib/network';
 import { onCopyText } from '@lib/utils';
 
 const NETWORK_DOT_COLORS: Record<NetworkId, string> = {
+  localnet: 'bg-purple-400',
   devnet: 'bg-blue-400',
   testnet: 'bg-yellow-400',
   mainnet: 'bg-green-400',

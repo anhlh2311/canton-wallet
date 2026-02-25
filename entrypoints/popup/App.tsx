@@ -3,6 +3,7 @@ import { sendMessage, MSG } from '@lib/messaging';
 import type { KeyPairData, OnboardingPrepareData } from '@lib/messaging';
 import { useAuthState } from './hooks/useAuth';
 import { useLockState } from './hooks/useLockState';
+import { useNetwork } from './hooks/useNetwork';
 
 import { Welcome } from './pages/onboarding/Welcome';
 import { CreatePassword } from './pages/onboarding/CreatePassword';
@@ -50,6 +51,8 @@ const IS_STANDALONE_WINDOW = new URLSearchParams(window.location.search).has('wi
 function App() {
   const { data: authState, isLoading: authLoading } = useAuthState();
   const { data: lockState, isLoading: lockLoading } = useLockState();
+  const { network } = useNetwork();
+  const isLocalnet = network === 'localnet';
   const [screen, setScreen] = useState<Screen>('loading');
   const [onboarding, setOnboarding] = useState<OnboardingState>(EMPTY_ONBOARDING);
 
@@ -126,6 +129,7 @@ function App() {
     case 'create-password':
       return (
         <CreatePassword
+          isLocalnet={isLocalnet}
           onReset={async () => {
             await sendMessage({ action: MSG.LOGOUT });
             clearOnboarding();
@@ -197,6 +201,7 @@ function App() {
     case 'acknowledgment':
       return (
         <Acknowledgment
+          isLocalnet={isLocalnet}
           onNext={() => setScreen('typed-confirm')}
           onBack={() => setScreen(onboarding.isImport ? 'key-setup' : 'show-key')}
         />
@@ -205,6 +210,7 @@ function App() {
     case 'typed-confirm':
       return (
         <TypedConfirm
+          isLocalnet={isLocalnet}
           password={onboarding.password}
           privateKey={onboarding.privateKey}
           publicKey={onboarding.publicKey}
