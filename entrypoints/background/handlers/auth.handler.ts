@@ -3,6 +3,7 @@ import type { MessageResponse, AuthStateData, GoogleAuthData } from '@lib/messag
 import { localStore, setUserScope } from '@lib/storage';
 import { sessionStore } from '@lib/storage';
 import apiClient from '../api-client';
+import { setCachedPrivateKey } from './session.handler';
 
 // --- PKCE helpers ---
 
@@ -42,6 +43,9 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
 
+    // CSRF: generate random state parameter
+    const state = crypto.randomUUID();
+
     // Step 1: Authorization code + PKCE via launchWebAuthFlow
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID);
@@ -52,6 +56,7 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
     authUrl.searchParams.set('code_challenge_method', 'S256');
     authUrl.searchParams.set('access_type', 'offline');
     authUrl.searchParams.set('prompt', 'consent');
+    authUrl.searchParams.set('state', state);
 
     const responseUrl = await chrome.identity.launchWebAuthFlow({
       url: authUrl.toString(),
@@ -60,8 +65,10 @@ export async function handleGoogleAuth(): Promise<MessageResponse<GoogleAuthData
 
     if (!responseUrl) return err('Auth cancelled');
 
-    // Extract authorization code from redirect URL
+    // Extract authorization code and validate state from redirect URL
     const url = new URL(responseUrl);
+    const returnedState = url.searchParams.get('state');
+    if (returnedState !== state) return err('OAuth state mismatch — possible CSRF attack');
     const code = url.searchParams.get('code');
     if (!code) return err('No authorization code in response');
 
@@ -179,8 +186,15 @@ export async function handleRefreshToken(): Promise<MessageResponse<{ token: str
 
 export async function handleLogout(): Promise<MessageResponse<void>> {
   try {
+    // Clear cached private key and auto-lock alarm
+    setCachedPrivateKey(null);
+    chrome.alarms.clear('auto-lock');
+
+    // Clear session and local storage
     await sessionStore.clear();
     await localStore.set('user', null);
+    
+    // Clear user scope
     setUserScope(null);
     return ok(undefined);
   } catch (e: unknown) {
