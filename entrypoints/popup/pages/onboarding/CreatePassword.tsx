@@ -21,9 +21,7 @@ export function CreatePassword({ onNext, onReset, isLocalnet }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const allRulesPassed = isLocalnet ? 
-                          password.length > 0 : 
-                          PASSWORD_RULES.every((r) => r.test(password));
+  const allRulesPassed = isLocalnet ? password.length > 0 : PASSWORD_RULES.every((r) => r.test(password));
   const passwordsMatch = password === confirm && confirm.length > 0;
   const canProceed = allRulesPassed && passwordsMatch;
 
