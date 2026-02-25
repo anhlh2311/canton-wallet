@@ -44,11 +44,6 @@ export function Balances() {
     return () => clearTimeout(timer);
   }, [showSuccess]);
 
-  // const balances = [...(data?.balances ?? [])].sort((a, b) => {
-  //   const orderA = TOKEN_ORDER[a.instrumentId?.id ?? ''] ?? 99;
-  //   const orderB = TOKEN_ORDER[b.instrumentId?.id ?? ''] ?? 99;
-  //   return orderA - orderB;
-  // });
   const balances = (() => {
     const fetched = [...(data?.balances ?? [])];
     // Always show Amulet so new users can access the faucet
