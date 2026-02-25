@@ -3,6 +3,7 @@ import type { MessageResponse, NetworkData } from '@lib/messaging';
 import { NETWORKS, NETWORK_IDS, type NetworkId } from '@lib/network';
 import { networkStore, sessionStore, setNetworkPrefix, setUserScope } from '@lib/storage';
 import { setApiBaseUrl } from '../api-client';
+import { setCachedPrivateKey } from './session.handler';
 
 export async function handleGetNetwork(): Promise<MessageResponse<NetworkData>> {
   try {
@@ -17,6 +18,9 @@ export async function handleSwitchNetwork(
   network: NetworkId,
 ): Promise<MessageResponse<NetworkData>> {
   try {
+    // Clear cached private key
+    setCachedPrivateKey(null);
+
     if (!NETWORK_IDS.includes(network)) {
       return err(`Invalid network: ${network}`);
     }
