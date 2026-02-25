@@ -5,7 +5,7 @@ export interface NetworkConfig {
   label: string;
   apiBaseUrl: string;
   explorerUrl: string;
-  faucetEnabled: boolean,
+  faucetEnabled: boolean;
 }
 
 export const NETWORKS: Record<NetworkId, NetworkConfig> = {
