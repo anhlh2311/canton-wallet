@@ -6,8 +6,8 @@ export default defineConfig({
   outDir: 'build',
   manifest: {
     name: 'Canton Wallet',
-    description: 'Canton Network (Kairo) wallet browser extension',
-    version: '0.1.0',
+    description: 'Canton Network (Kairo) wallet browser extension with CIP-0103 dApp API support',
+    version: '0.2.0',
     // Stable key pins the extension ID so the OAuth redirect URI stays consistent.
     // The redirect URI will be: https://<extension-id>.chromiumapp.org/
     // Register this URI in Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs.
