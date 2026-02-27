@@ -6,6 +6,7 @@ import { IconGoogle } from '@assets/icons/icon-google';
 import { IconLogo } from '@assets/icons/icon-logo';
 import { NETWORK_IDS, NETWORKS, type NetworkId } from '@lib/network';
 import type { GoogleAuthData } from '@lib/messaging';
+import { createCenteredPopup } from '@lib/utils';
 
 const NETWORK_DOT_COLORS: Record<NetworkId, string> = {
   localnet: 'bg-purple-400',
@@ -81,12 +82,11 @@ export function Welcome({ onSuccess }: Props) {
     // Open a persistent popup window so the UI survives the OAuth redirect.
     // The extension popup auto-closes when it loses focus, but a window stays open.
     try {
-      await chrome.windows.create({
-        url: chrome.runtime.getURL('popup.html?window=1&action=sign-in'),
-        type: 'popup',
-        width: 420,
-        height: 660,
-      });
+      await createCenteredPopup(
+        chrome.runtime.getURL('popup.html?window=1&action=sign-in'),
+        420,
+        660,
+      );
       // Close the extension popup so only the persistent window remains
       window.close();
     } catch {

@@ -13,6 +13,7 @@ import { Acknowledgment } from './pages/onboarding/Acknowledgment';
 import { TypedConfirm } from './pages/onboarding/TypedConfirm';
 import { Unlock } from './pages/Unlock';
 import { Dashboard } from './pages/dashboard';
+import { DappApproval } from './pages/approval/DappApproval';
 
 type Screen =
   | 'loading'
@@ -48,7 +49,15 @@ const EMPTY_ONBOARDING: OnboardingState = {
 /** True when the app is running inside a persistent auth window (not the popup). */
 const IS_STANDALONE_WINDOW = new URLSearchParams(window.location.search).has('window');
 
+const searchParams = new URLSearchParams(window.location.search);
+const APPROVAL_REQUEST_ID = searchParams.get('action') === 'dapp-approve' ? searchParams.get('id') : null;
+
 function App() {
+  // If opened as a dApp approval popup, render only the approval UI
+  if (APPROVAL_REQUEST_ID) {
+    return <DappApproval requestId={APPROVAL_REQUEST_ID} />;
+  }
+
   const { data: authState, isLoading: authLoading } = useAuthState();
   const { data: lockState, isLoading: lockLoading } = useLockState();
   const { network } = useNetwork();

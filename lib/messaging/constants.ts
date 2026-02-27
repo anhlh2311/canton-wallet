@@ -46,6 +46,10 @@ export const MSG = {
   FETCH_ACTIVITY: 'FETCH_ACTIVITY',
   FETCH_ABOUT_ME: 'FETCH_ABOUT_ME',
   REQUEST_FAUCET: 'REQUEST_FAUCET',
+
+  // dApp approval flow
+  GET_DAPP_APPROVAL: 'GET_DAPP_APPROVAL',
+  DAPP_APPROVAL_RESULT: 'DAPP_APPROVAL_RESULT',
 } as const;
 
 export type MessageAction = (typeof MSG)[keyof typeof MSG];

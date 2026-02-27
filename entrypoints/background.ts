@@ -1,6 +1,6 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { MSG } from '@lib/messaging';
-import { err } from '@lib/messaging/protocol';
+import { ok, err } from '@lib/messaging/protocol';
 import type { MessageRequest } from '@lib/messaging/types';
 import { NETWORKS } from '@lib/network';
 import { networkStore, localStore, setNetworkPrefix, setUserScope, migrateUnprefixedData, migrateToUserScoped } from '@lib/storage';
@@ -52,6 +52,15 @@ import {
   handleSwitchNetwork,
 } from './background/handlers/network.handler';
 import { setApiBaseUrl } from './background/api-client';
+import { createCenteredPopup } from '@lib/utils';
+import { isSpliceMessage, WalletEvent } from '@lib/dapp-api/types';
+import { handleDappApiRequest } from './background/handlers/dapp-api.handler';
+import { setupEventBroadcaster } from './background/handlers/event-broadcaster';
+import {
+  getApprovalDetails,
+  resolveApproval,
+  setupApprovalWindowListener,
+} from './background/handlers/approval.handler';
 
 export default defineBackground(() => {
   console.log('[Canton Wallet] Background service worker started');
@@ -76,8 +85,38 @@ export default defineBackground(() => {
   // Set up auto-lock alarm listener
   setupAutoLock();
 
-  // Main message router
+  // Set up event broadcaster for dApp API (statusChanged, accountsChanged)
+  setupEventBroadcaster();
+
+  // Set up approval popup window close listener (auto-reject on close)
+  setupApprovalWindowListener();
+
+  // CIP-0103 dApp API message handler (from content script)
+  // This handles SpliceMessage format from web pages via the content script bridge.
+  // It must be registered BEFORE the internal handler to intercept dApp messages.
+  chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
+    if (!isSpliceMessage(message)) return false; // Not a SpliceMessage — let other listeners handle it
+
+    if (message.type === WalletEvent.SPLICE_WALLET_REQUEST) {
+      const senderOrigin = sender.origin || (sender.tab?.url ? new URL(sender.tab.url).origin : undefined);
+      handleDappApiRequest(message, senderOrigin)
+        .then(sendResponse)
+        .catch(() => sendResponse(null));
+      return true; // Async response
+    }
+
+    if (message.type === WalletEvent.SPLICE_WALLET_EXT_OPEN) {
+      createCenteredPopup(message.url, 400, 600);
+      sendResponse(null);
+      return false;
+    }
+
+    return false;
+  });
+
+  // Main message router (existing popup ↔ background communication)
   chrome.runtime.onMessage.addListener((message: MessageRequest, _sender, sendResponse) => {
+    if (isSpliceMessage(message)) return false; // Already handled by CIP-0103 listener above
     const handler = routeMessage(message);
     handler.then(sendResponse).catch((e) => sendResponse(err(String(e))));
     return true; // Keep message channel open for async response
@@ -165,6 +204,16 @@ async function routeMessage(message: MessageRequest) {
       return handleFetchAboutMe();
     case MSG.REQUEST_FAUCET:
       return handleRequestFaucet(message.payload.password, message.payload.amount);
+
+    // dApp approval flow
+    case MSG.GET_DAPP_APPROVAL: {
+      const details = getApprovalDetails(message.payload.requestId);
+      return details ? ok(details) : err('Approval request not found');
+    }
+    case MSG.DAPP_APPROVAL_RESULT: {
+      resolveApproval(message.payload.requestId, message.payload.approved);
+      return ok(null);
+    }
 
     default:
       return err(`Unknown action: ${(message as { action: string }).action}`);

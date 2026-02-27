@@ -123,7 +123,10 @@ export type MessageRequest =
       payload: { page: number; limit: number };
     }
   | { action: typeof MSG.FETCH_ABOUT_ME }
-  | { action: typeof MSG.REQUEST_FAUCET; payload: { password: string; amount: string } };
+  | { action: typeof MSG.REQUEST_FAUCET; payload: { password: string; amount: string } }
+  // dApp approval flow
+  | { action: typeof MSG.GET_DAPP_APPROVAL; payload: { requestId: string } }
+  | { action: typeof MSG.DAPP_APPROVAL_RESULT; payload: { requestId: string; approved: boolean } };
 
 // ── Response types ──
 
@@ -206,4 +209,11 @@ export interface OnboardingPrepareData {
   namespace: string;
   multiHash: string;
   topologyTransactions: string[];
+}
+
+export interface DappApprovalData {
+  requestId: string;
+  method: string;
+  origin: string;
+  params?: unknown;
 }
