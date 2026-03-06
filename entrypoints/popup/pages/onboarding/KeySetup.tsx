@@ -4,12 +4,13 @@ import { KeyRoundIcon, ImportIcon, ArrowLeftIcon, Loader2Icon, AlertTriangleIcon
 
 interface Props {
   existingPublicKey?: string;
+  partyStatus?: string;
   onNext: (data: { privateKey: string; publicKey: string; isImport: boolean }) => void;
   onBack: () => void;
 }
 
-export function KeySetup({ existingPublicKey, onNext, onBack }: Props) {
-  const isExistingUser = !!existingPublicKey;
+export function KeySetup({ existingPublicKey, partyStatus, onNext, onBack }: Props) {
+  const isExistingUser = !!existingPublicKey || partyStatus === 'SUCCESSFULLY';
   const [mode, setMode] = useState<'choose' | 'import'>(isExistingUser ? 'import' : 'choose');
   const [importKey, setImportKey] = useState('');
   const [error, setError] = useState('');

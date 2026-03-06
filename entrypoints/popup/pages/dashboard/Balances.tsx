@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useBalances } from '../../hooks/useBalances';
 import { usePreapprovalStatus, useRegisterPreapproval } from '../../hooks/useWallet';
-import { Loader2Icon, AlertCircleIcon, ShieldCheckIcon, CheckCircle2Icon, ChevronRightIcon } from 'lucide-react';
+import { Loader2Icon, AlertCircleIcon, ShieldCheckIcon, CheckCircle2Icon, ChevronRightIcon, RefreshCwIcon } from 'lucide-react';
 import { IconCanton } from '@assets/icons/icon-canton';
 import { IconCBTCCoin } from '@assets/icons/icon-yield-coin';
 import { IconUSDC } from '@assets/icons/icon-usdc';
 import { IconDefaultToken } from '@assets/icons/icon-default-token';
 import { TokenDetail } from './TokenDetail';
-import type { BalanceSwapResponse } from '@lib/types';
 import BigNumber from 'bignumber.js';
 
 const TOKEN_ICONS: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
@@ -25,7 +24,7 @@ export function Balances() {
   const registerPreapproval = useRegisterPreapproval();
   const [preapprovalError, setPreapprovalError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
-  const [selectedToken, setSelectedToken] = useState<BalanceSwapResponse | null>(null);
+  const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
 
   const handleRegisterPreapproval = async () => {
     setPreapprovalError('');
@@ -67,8 +66,12 @@ export function Balances() {
     !registerPreapproval.isSuccess &&
     (!preapprovalData || !preapprovalData.hasPreapproval);
 
+  const selectedToken = selectedTokenId
+    ? balances.find((b) => (b.instrumentId?.id ?? 'Unknown') === selectedTokenId) ?? null
+    : null;
+
   if (selectedToken) {
-    return <TokenDetail balance={selectedToken} onBack={() => setSelectedToken(null)} />;
+    return <TokenDetail balance={selectedToken} onBack={() => setSelectedTokenId(null)} />;
   }
 
   return (
@@ -112,6 +115,19 @@ export function Balances() {
         </div>
       )}
 
+      {/* Section header with refresh */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-muted-foreground">Tokens</p>
+        <button
+          onClick={() => refetch()}
+          disabled={isLoading}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+        >
+          <RefreshCwIcon className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
+
       {/* Balance content */}
       {isLoading ? (
         <div className="flex items-center justify-center h-40">
@@ -134,7 +150,7 @@ export function Balances() {
           return (
             <button
               key={tokenId}
-              onClick={() => setSelectedToken(b)}
+              onClick={() => setSelectedTokenId(tokenId)}
               className="w-full rounded-xl bg-secondary p-4 flex items-center gap-3 hover:bg-secondary/80 transition-colors text-left"
             >
               <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-background">

@@ -13,6 +13,7 @@ import {
 } from './background/handlers/auth.handler';
 import {
   setupAutoLock,
+  resetAutoLockTimer,
   handleUnlock,
   handleLock,
   handleGetLockState,
@@ -32,10 +33,10 @@ import {
   handleSignAndSubmitTransferTokenStandard,
   handleSignAndSubmitApprove,
   handleSignAndSubmitReject,
+  handleSignAndSubmitWithdraw,
 } from './background/handlers/signing.handler';
 import {
   handleFetchBalances,
-  handleFetchPrices,
   handlePrepareTransferPreapproval,
   handlePrepareTransferTokenStandard,
   handleFetchIncomingOffers,
@@ -46,12 +47,14 @@ import {
   handleFetchActivity,
   handleFetchAboutMe,
   handleRequestFaucet,
+  handlePrepareWithdraw,
 } from './background/handlers/api.handler';
 import {
   handleGetNetwork,
   handleSwitchNetwork,
 } from './background/handlers/network.handler';
 import { setApiBaseUrl } from './background/api-client';
+import { setGatewayBaseUrl, setGatewayAuth } from './background/gateway-client';
 import { createCenteredPopup } from '@lib/utils';
 import { isSpliceMessage, WalletEvent } from '@lib/dapp-api/types';
 import { handleDappApiRequest } from './background/handlers/dapp-api.handler';
@@ -71,6 +74,8 @@ export default defineBackground(() => {
     const network = await networkStore.get();
     setNetworkPrefix(network);
     setApiBaseUrl(NETWORKS[network].apiBaseUrl);
+    setGatewayBaseUrl(NETWORKS[network].gatewayUrl);
+    setGatewayAuth(NETWORKS[network].gatewayAuth);
 
     // Migrate existing keystore/onboardingComplete to per-user keys
     await migrateToUserScoped();
@@ -124,6 +129,12 @@ export default defineBackground(() => {
 });
 
 async function routeMessage(message: MessageRequest) {
+  // Reset auto-lock timer on user activity (skip read-only state checks)
+  const skipReset = [MSG.GET_AUTH_STATE, MSG.GET_LOCK_STATE, MSG.GET_NETWORK, MSG.GET_DAPP_APPROVAL];
+  if (!skipReset.includes(message.action as (typeof skipReset)[number])) {
+    resetAutoLockTimer();
+  }
+
   switch (message.action) {
     // Auth
     case MSG.GOOGLE_AUTH:
@@ -178,12 +189,12 @@ async function routeMessage(message: MessageRequest) {
       return handleSignAndSubmitApprove(message.payload);
     case MSG.SIGN_AND_SUBMIT_REJECT:
       return handleSignAndSubmitReject(message.payload);
+    case MSG.SIGN_AND_SUBMIT_WITHDRAW:
+      return handleSignAndSubmitWithdraw(message.payload);
 
     // API proxy
     case MSG.FETCH_BALANCES:
       return handleFetchBalances();
-    case MSG.FETCH_PRICES:
-      return handleFetchPrices();
     case MSG.PREPARE_TRANSFER_PREAPPROVAL:
       return handlePrepareTransferPreapproval(message.payload);
     case MSG.PREPARE_TRANSFER_TOKEN_STANDARD:
@@ -198,6 +209,8 @@ async function routeMessage(message: MessageRequest) {
       return handlePrepareApprove(message.payload);
     case MSG.PREPARE_REJECT:
       return handlePrepareReject(message.payload);
+    case MSG.PREPARE_WITHDRAW:
+      return handlePrepareWithdraw(message.payload);
     case MSG.FETCH_ACTIVITY:
       return handleFetchActivity(message.payload);
     case MSG.FETCH_ABOUT_ME:
