@@ -1,6 +1,6 @@
 # Canton Wallet
 
-A secure browser extension wallet for the **Canton Network (Kairo)**. Supports token management, transfers, offer approvals, and activity history — all backed by the same API as the [Canton Exchange Frontend](../canton-exchange-frontend).
+A secure browser extension wallet for the **Canton Network**. Supports token management, transfers, offer approvals, and activity history — all backed by the same API as the [Canton Exchange Frontend](../canton-exchange-frontend).
 
 Built with [WXT](https://wxt.dev), React 19, TypeScript, and Tailwind CSS 4.
 
@@ -226,6 +226,8 @@ canton-wallet/
 │
 ├── entrypoints/
 │   ├── background.ts             # Service worker: message router, network init, migrations
+│   ├── content.ts                # CIP-0103 content script bridge (postMessage <-> chrome.runtime)
+│   ├── provider.content.ts       # MAIN world script: injects window.canton marker for SDK detection
 │   ├── background/
 │   │   ├── api-client.ts         # Axios instance with dynamic baseURL (setApiBaseUrl)
 │   │   ├── handlers/
@@ -312,6 +314,30 @@ canton-wallet/
     ├── globals.css               # Popup: Tailwind + dark theme + 400x600 sizing
     └── options.css               # Options page: Tailwind + dark theme (no fixed size)
 ```
+
+---
+
+## CIP-0103 dApp API
+
+The extension implements the Canton CIP-0103 standard for dApp-wallet communication via `window.postMessage`. Two content scripts enable this:
+
+- **`content.ts`** (ISOLATED world) — Relays CIP-0103 messages between the web page (`window.postMessage`) and the background service worker (`chrome.runtime.sendMessage`). Handles `SPLICE_WALLET_REQUEST`, `SPLICE_WALLET_EXT_READY` → `SPLICE_WALLET_EXT_ACK` discovery, `SPLICE_WALLET_EXT_OPEN`, and `SPLICE_WALLET_EVENT` forwarding.
+- **`provider.content.ts`** (MAIN world) — Injects a `window.canton` marker (`{ __ginkgo: true }`) at `document_start` for fast SDK detection. The dApp SDK's `ExtensionAdapter.detect()` checks this marker before falling back to the slower EXT_READY/EXT_ACK handshake. The SDK later overwrites the marker with a real `Provider` instance.
+
+| Method | Status | Description |
+| --- | --- | --- |
+| `connect` | Implemented | Check wallet readiness (approval popup) |
+| `disconnect` | Implemented | Acknowledge disconnect |
+| `isConnected` | Implemented | Alias for connect |
+| `status` | Implemented | Provider info, connection, network, session |
+| `getActiveNetwork` | Implemented | Current network config |
+| `listAccounts` | Implemented | List wallet accounts (full metadata) |
+| `getPrimaryAccount` | Implemented | Primary account details |
+| `signMessage` | Implemented | Sign arbitrary message (approval popup) |
+| `signTransaction` | Implemented | Sign transaction hash (approval popup) |
+| `prepareExecute` | Implemented | Full tx lifecycle via Gateway |
+| `prepareExecuteAndWait` | Implemented | Same, returns execution result |
+| `ledgerApi` | Implemented | Proxy to Gateway Ledger API |
 
 ---
 

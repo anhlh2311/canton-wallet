@@ -3,7 +3,24 @@
     "allow": [
       "Read(//Users/lehoanganh/Working/FETCH/Angelhack/Canton/cn-quickstart-dapp-core/dapp-core/src/modules/faucet/**)",
       "Read(//Users/lehoanganh/Working/FETCH/Angelhack/Canton/cn-quickstart-dapp-core/dapp-core/src/lib/**)",
-      "Read(//Users/lehoanganh/Working/FETCH/Angelhack/Canton/cn-quickstart-dapp-core/dapp-core/src/modules/gateway/**)"
+      "Read(//Users/lehoanganh/Working/FETCH/Angelhack/Canton/cn-quickstart-dapp-core/dapp-core/src/modules/gateway/**)",
+      "Read(//Users/lehoanganh/Working/FETCH/Angelhack/Canton/**)",
+      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
+      "Bash(find /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo/entrypoints -name *inject* -o -name *main-world* -o -name *page*)",
+      "Bash(find /Users/lehoanganh/Working/FETCH/Angelhack/Canton/canton-wallet/entrypoints -name *inject* -o -name *main-world* -o -name *page*)",
+      "Bash(SRC=\"/Users/lehoanganh/Working/FETCH/Angelhack/Canton/canton-wallet/assets/icons/Kairo_Logomark_Color.png\")",
+      "Bash(DEST=\"/Users/lehoanganh/Working/FETCH/Angelhack/Canton/canton-wallet/public/icon\")",
+      "Bash(for size:*)",
+      "Bash(do sips:*)",
+      "Bash(done)",
+      "Bash(rm -rf node_modules)",
+      "Bash(yarn install:*)",
+      "Bash(yarn start:*)",
+      "Bash(grep -n \"injectProvider\" /Users/lehoanganh/Working/FETCH/Angelhack/Canton/splice-wallet-kernel/sdk/dapp-sdk/src/*.ts)",
+      "Bash(corepack enable:*)",
+      "Bash(corepack install:*)",
+      "Bash(corepack yarn:*)",
+      "Bash(find /Users/lehoanganh/Working/FETCH/Angelhack/Canton/splice-wallet-kernel -type f -name \"*provider-dapp*\" | grep -E \"\\\\.\\(ts|tsx\\)$\" | head -10)"
     ]
   }
 }
