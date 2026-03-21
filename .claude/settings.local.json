@@ -20,7 +20,16 @@
       "Bash(corepack enable:*)",
       "Bash(corepack install:*)",
       "Bash(corepack yarn:*)",
-      "Bash(find /Users/lehoanganh/Working/FETCH/Angelhack/Canton/splice-wallet-kernel -type f -name \"*provider-dapp*\" | grep -E \"\\\\.\\(ts|tsx\\)$\" | head -10)"
+      "Bash(find /Users/lehoanganh/Working/FETCH/Angelhack/Canton/splice-wallet-kernel -type f -name \"*provider-dapp*\" | grep -E \"\\\\.\\(ts|tsx\\)$\" | head -10)",
+      "Bash(grep -n \"^[\\\\s]*[┌┐└┘├┤┬┴─]\" /Users/lehoanganh/Working/FETCH/Angelhack/Canton/canton-wallet/docs/*.md | head -100)",
+      "Bash(grep -n \"\\\\-\\\\->\" /Users/lehoanganh/Working/FETCH/Angelhack/Canton/canton-wallet/docs/*.md | head -50)",
+      "Bash(grep -n \"^[[:space:]]*\\\\`\\\\`\\\\`\" /Users/lehoanganh/Working/FETCH/Angelhack/Canton/canton-wallet/docs/*.md)",
+      "Bash(find /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo/docs -type f -name \"*.md\" 2>/dev/null | grep -v node_modules)",
+      "Bash(ls -la /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo/entrypoints/background/ | grep -E '\\\\.\\(ts|tsx\\)$')",
+      "Bash(cd /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo && npx markdownlint-cli docs/ 2>&1)",
+      "Bash(npx markdownlint-cli:*)",
+      "Bash(cd /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo && npx markdownlint-cli --fix docs/ 2>&1; echo \"EXIT: $?\")",
+      "Bash(cd /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo && npx markdownlint-cli docs/ 2>&1; echo \"EXIT: $?\")"
     ]
   }
 }

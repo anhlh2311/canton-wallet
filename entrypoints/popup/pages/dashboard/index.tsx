@@ -3,7 +3,7 @@ import { WalletIcon, SendIcon, InboxIcon, HistoryIcon, SettingsIcon, ChevronDown
 import { Balances } from './Balances';
 import { Transfer } from './Transfer';
 import { Offers } from './offers';
-import { Activity } from './Activity';
+import { HistoryTab } from './offers/HistoryTab';
 import { Settings } from './Settings';
 import { useLock } from '../../hooks/useLockState';
 import { useAuthState, useLogout } from '../../hooks/useAuth';
@@ -28,7 +28,7 @@ function formatPartyId(partyId: string): string {
   return `${hint}::${sig.slice(0, 10)}…${sig.slice(-10)}`;
 }
 
-type Tab = 'balances' | 'transfer' | 'offers' | 'activity';
+type Tab = 'balances' | 'transfer' | 'offers' | 'history';
 
 interface Props {
   onLock: () => void;
@@ -84,7 +84,7 @@ export function Dashboard({ onLock, onLogout }: Props) {
     { id: 'balances', label: 'Wallet', icon: WalletIcon },
     { id: 'transfer', label: 'Send', icon: SendIcon },
     { id: 'offers', label: 'Offers', icon: InboxIcon },
-    { id: 'activity', label: 'Activity', icon: HistoryIcon },
+    { id: 'history', label: 'History', icon: HistoryIcon },
   ];
 
   if (showSettings) {
@@ -183,7 +183,7 @@ export function Dashboard({ onLock, onLogout }: Props) {
         {tab === 'balances' && <Balances />}
         {tab === 'transfer' && <Transfer />}
         {tab === 'offers' && <Offers />}
-        {tab === 'activity' && <Activity />}
+        {tab === 'history' && <HistoryTab />}
       </div>
 
       {/* Bottom nav */}
