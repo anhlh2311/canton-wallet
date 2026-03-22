@@ -63,7 +63,7 @@ export function Balances() {
   })();
   const showPreapprovalBanner =
     !preapprovalLoading &&
-    !registerPreapproval.isSuccess &&
+    !showSuccess &&
     (!preapprovalData || !preapprovalData.hasPreapproval);
 
   const selectedToken = selectedTokenId
@@ -78,10 +78,10 @@ export function Balances() {
     <div className="p-4 space-y-3">
       {/* Transfer pre-approval banner — always visible when no active preapproval */}
       {showPreapprovalBanner && (
-        <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-3">
+        <div className="rounded-xl bg-amber-400/10 border border-amber-400/30 p-3">
           <div className="flex items-center gap-2 mb-2">
-            <ShieldCheckIcon className="w-4 h-4 text-yellow-500 shrink-0" />
-            <p className="text-xs font-medium text-yellow-500">
+            <ShieldCheckIcon className="w-4 h-4 text-amber-400 shrink-0" />
+            <p className="text-xs font-medium text-amber-400">
               Transfer pre-approval not active
             </p>
           </div>
@@ -89,12 +89,14 @@ export function Balances() {
             Register transfer pre-approval to enable receiving Amulet transfers.
           </p>
           {preapprovalError && (
-            <p className="text-xs text-destructive mb-2">{preapprovalError}</p>
+            <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 mb-2">
+              <p className="text-sm text-red-400">{preapprovalError}</p>
+            </div>
           )}
           <button
             onClick={handleRegisterPreapproval}
             disabled={registerPreapproval.isPending}
-            className="w-full rounded-lg bg-yellow-500 text-black py-1.5 text-xs font-medium disabled:opacity-50 transition-opacity"
+            className="w-full rounded-lg bg-primary text-primary-foreground py-1.5 text-xs font-medium disabled:opacity-50 transition-opacity"
           >
             {registerPreapproval.isPending ? (
               <Loader2Icon className="w-3.5 h-3.5 animate-spin mx-auto" />
@@ -107,9 +109,9 @@ export function Balances() {
 
       {/* Success message after registration */}
       {showSuccess && (
-        <div className="rounded-xl bg-green-500/10 border border-green-500/30 p-3 flex items-center gap-2">
-          <CheckCircle2Icon className="w-4 h-4 text-green-500 shrink-0" />
-          <p className="text-xs font-medium text-green-500">
+        <div className="rounded-xl bg-positive/10 border border-positive/30 p-3 flex items-center gap-2">
+          <CheckCircle2Icon className="w-4 h-4 text-positive shrink-0" />
+          <p className="text-xs font-medium text-positive">
             Transfer pre-approval registered successfully!
           </p>
         </div>
@@ -151,7 +153,7 @@ export function Balances() {
             <button
               key={tokenId}
               onClick={() => setSelectedTokenId(tokenId)}
-              className="w-full rounded-xl bg-secondary p-4 flex items-center gap-3 hover:bg-secondary/80 transition-colors text-left"
+              className="w-full rounded-xl bg-primary/5 border border-primary/10 p-4 flex items-center gap-3 hover:bg-primary/10 hover:border-primary/25 transition-colors text-left"
             >
               <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-background">
                 <Icon className="w-8 h-8" />
@@ -165,7 +167,7 @@ export function Balances() {
               <div className="text-right">
                 <p className="font-medium text-foreground">{total.toFormat()}</p>
                 {new BigNumber(b.locked ?? '0').gt(0) && (
-                  <p className="text-xs text-yellow-500">
+                  <p className="text-xs text-amber-400">
                     Locked: {new BigNumber(b.locked ?? '0').toFormat()}
                   </p>
                 )}

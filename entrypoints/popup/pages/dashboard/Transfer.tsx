@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2Icon, CheckCircleIcon } from 'lucide-react';
+import { Loader2Icon, CheckCircleIcon, AlertTriangleIcon } from 'lucide-react';
 import { SUPPORTED_TOKENS } from '@lib/constants';
 import {
   usePrepareTransferPreapproval,
@@ -101,7 +101,7 @@ export function Transfer() {
   if (step === 'success') {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 gap-4">
-        <CheckCircleIcon className="w-16 h-16 text-green-500" />
+        <CheckCircleIcon className="w-16 h-16 text-positive" />
         <h2 className="text-lg font-bold text-foreground">Transfer Sent</h2>
         <p className="text-sm text-muted-foreground text-center">
           {amount} {tokenId} sent to recipient
@@ -147,12 +147,17 @@ export function Transfer() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full mt-1 rounded-lg bg-secondary text-foreground px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+            className="w-full mt-1 rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             placeholder="Enter password"
           />
         </div>
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && (
+          <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2">
+            <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0" />
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
 
         <div className="flex gap-2">
           <button
@@ -182,7 +187,7 @@ export function Transfer() {
         <select
           value={tokenId}
           onChange={(e) => setTokenId(e.target.value)}
-          className="w-full mt-1 rounded-lg bg-secondary text-foreground px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+          className="w-full mt-1 rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
         >
           {SUPPORTED_TOKENS.map((t) => (
             <option key={t.id} value={t.id}>
@@ -194,7 +199,7 @@ export function Transfer() {
           <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
             <span>Available: <span className="text-foreground font-medium">{availableBalance.toFormat()}</span></span>
             {lockedBalance.gt(0) && (
-              <span>Locked: <span className="text-yellow-500 font-medium">{lockedBalance.toFormat()}</span></span>
+              <span>Locked: <span className="text-amber-400 font-medium">{lockedBalance.toFormat()}</span></span>
             )}
           </div>
         )}
@@ -206,7 +211,7 @@ export function Transfer() {
           type="text"
           value={recipient}
           onChange={(e) => setRecipient(e.target.value)}
-          className="w-full mt-1 rounded-lg bg-secondary text-foreground px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+          className="w-full mt-1 rounded-lg border border-primary/20 bg-primary/5 text-foreground px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           placeholder="Enter party ID"
         />
       </div>
@@ -235,7 +240,12 @@ export function Transfer() {
         </div>
       </div>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && (
+          <div className="flex gap-2 items-center rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2">
+            <AlertTriangleIcon className="w-4 h-4 text-red-400 shrink-0" />
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
 
       <button
         onClick={handlePrepare}
