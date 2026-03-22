@@ -49,8 +49,28 @@ const EMPTY_ONBOARDING: OnboardingState = {
 /** True when the app is running inside a persistent auth window (not the popup). */
 const IS_STANDALONE_WINDOW = new URLSearchParams(window.location.search).has('window');
 
+/** True when the app is running inside a full browser tab (not the extension popup). */
+const IS_TAB_MODE = new URLSearchParams(window.location.search).has('tab');
+
+// Apply tab-mode class to <html> so CSS can override fixed popup sizing
+if (IS_TAB_MODE) {
+  document.documentElement.classList.add('tab-mode');
+}
+
 const searchParams = new URLSearchParams(window.location.search);
 const APPROVAL_REQUEST_ID = searchParams.get('action') === 'dapp-approve' ? searchParams.get('id') : null;
+
+/** Wrap content in a centered card layout when running in a full browser tab. */
+function TabLayout({ children }: { children: React.ReactNode }) {
+  if (!IS_TAB_MODE) return <>{children}</>;
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
+      <div className="w-full max-w-[420px] h-[600px] rounded-2xl border border-border/40 shadow-2xl shadow-black/40 overflow-y-auto">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function App() {
   // If opened as a dApp approval popup, render only the approval UI
@@ -101,18 +121,19 @@ function App() {
     }
   }, [authState, lockState, authLoading, lockLoading]);
 
-  if (screen === 'loading') {
-    return (
-      <div className="flex items-center justify-center h-full bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
-      </div>
-    );
-  }
-
-  switch (screen) {
-    case 'welcome':
+  const renderScreen = () => {
+    if (screen === 'loading') {
       return (
-        <Welcome
+        <div className="flex items-center justify-center h-full bg-background">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+        </div>
+      );
+    }
+
+    switch (screen) {
+      case 'welcome':
+        return (
+          <Welcome
           onSuccess={(data) => {
             if (data.onboardingComplete) {
               // User already has a keystore on this network — go straight to unlock.
@@ -249,9 +270,12 @@ function App() {
         />
       );
 
-    default:
-      return null;
-  }
+      default:
+        return null;
+    }
+  };
+
+  return <TabLayout>{renderScreen()}</TabLayout>;
 }
 
 export default App;
