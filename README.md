@@ -409,6 +409,8 @@ Dashboard → Send tab → Select token (shows available/locked balance) + recip
 
 Transfer pre-approval is required to receive Amulet transfers. It is automatically registered after onboarding. If missing (e.g., onboarding occurred before this feature), a yellow warning banner appears on the Balances tab with a manual registration button. A green success toast is shown for 5 seconds after successful registration.
 
+**Preapproval cache TTL:** After a successful registration (or dapp-core confirming the preapproval exists), the status is cached in-memory for **30 minutes** (`PREAPPROVAL_CACHE_TTL_MS`). During this window, `GET_PREAPPROVAL_STATUS` returns `true` without hitting dapp-core. After expiry, the next status check re-queries dapp-core, allowing the banner to reappear if the on-chain preapproval has expired. The cache is also cleared on **logout** and **network switch**.
+
 ### Offer Approval
 
 ```text

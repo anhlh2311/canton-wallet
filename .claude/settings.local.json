@@ -29,7 +29,22 @@
       "Bash(cd /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo && npx markdownlint-cli docs/ 2>&1)",
       "Bash(npx markdownlint-cli:*)",
       "Bash(cd /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo && npx markdownlint-cli --fix docs/ 2>&1; echo \"EXIT: $?\")",
-      "Bash(cd /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo && npx markdownlint-cli docs/ 2>&1; echo \"EXIT: $?\")"
+      "Bash(cd /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo && npx markdownlint-cli docs/ 2>&1; echo \"EXIT: $?\")",
+      "Bash(grep -r \"wallet-gateway\" /Users/lehoanganh/Working/FETCH/Angelhack/Canton/Quickstart/dapp-core/docker --include=\"*.yaml\" --include=\"*.yml\" --include=\"compose*\" 2>/dev/null | head -20)",
+      "Bash(find /Users/lehoanganh/Working/FETCH/Angelhack/Canton/Quickstart -name \"*wallet-gateway*\" -o -name \"*gateway*compose*\" 2>/dev/null | head -20)",
+      "Bash(find /Users/lehoanganh/Working/FETCH/Angelhack/Canton/splice-wallet-kernel/wallet-gateway -name \"*.ts\" -o -name \"*.js\" 2>/dev/null | head -10)",
+      "Bash(grep -r \"not connected\\\\|assertConnected\" /Users/lehoanganh/Working/FETCH/Angelhack/Canton/splice-wallet-kernel/wallet-gateway --include=\"*.ts\" --include=\"*.js\" 2>/dev/null | head -20)",
+      "Bash(grep -r \"User is not connected\" /Users/lehoanganh/Working/FETCH/Angelhack/Canton --include=\"*.ts\" --include=\"*.js\" 2>/dev/null | head -5)",
+      "Bash(find /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo/docs -type f -name \"*.md\" 2>/dev/null | head -10)",
+      "Bash(diff -u /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo/entrypoints/popup/pages/dashboard/Balances.tsx /Users/lehoanganh/Working/FETCH/Angelhack/Canton/canton-wallet/entrypoints/popup/pages/dashboard/Balances.tsx | grep -E '^\\\\+|^\\\\-' | grep -v '^[+-]{3}' | grep -v '^\\\\+\\\\s*$' | grep -v '^\\\\-\\\\s*$')",
+      "Bash(diff -u /Users/lehoanganh/Working/FETCH/Angelhack/Canton/ginkgo/entrypoints/popup/pages/dashboard/index.tsx /Users/lehoanganh/Working/FETCH/Angelhack/Canton/canton-wallet/entrypoints/popup/pages/dashboard/index.tsx | grep -E '^\\\\+|^\\\\-' | grep -v '^[+-]{3}' | grep -v '^\\\\+\\\\s*$' | grep -v '^\\\\-\\\\s*$' | head -50)",
+      "Bash(docker exec:*)",
+      "Bash(curl -s http://localhost:3003/external-party/devnet-tap/prepare -X POST -H 'Content-Type: application/json' -d '{\"partyId\":\"canton-wallet::12206009c538e4364fd21c363abd91e0c44f762524d50d6ef3716df46807df40af5d\"}' 2>&1)",
+      "Bash(docker restart:*)",
+      "Bash(grep -r \"staleTime\\\\|gcTime\" /Users/lehoanganh/Working/FETCH/Angelhack/Canton/canton-wallet/entrypoints --include=\"*.ts\" --include=\"*.tsx\" 2>/dev/null | head -20)",
+      "Bash(grep -B2 -A2 \"tab === 'balances'\" /Users/lehoanganh/Working/FETCH/Angelhack/Canton/canton-wallet/entrypoints/popup/pages/dashboard/index.tsx)",
+      "Bash(npx tsc:*)",
+      "Bash(git status:*)"
     ]
   }
 }
