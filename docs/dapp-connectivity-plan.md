@@ -58,22 +58,19 @@ The canton-wallet is **self-contained with no dApp connectivity**:
 
 ## Architecture: How dApp ↔ Extension Communication Works
 
-```text
-Test dApp (browser tab)                   Canton Wallet Extension
-┌──────────────────────┐                  ┌──────────────────────────┐
-│                      │                  │                          │
-│  @canton-network/    │   postMessage    │  content-script.ts       │
-│  dapp-sdk            │ ◄─────────────►  │  (listens window msgs,   │
-│                      │                  │   relays to background)  │
-│  DappProvider uses   │                  │         │                │
-│  WindowTransport     │                  │  chrome.runtime.sendMsg  │
-│  (window.postMessage)│                  │         ↓                │
-│                      │                  │  background.ts           │
-│  sdk.connect()       │                  │  (CIP-0103 RPC handler)  │
-│  sdk.listAccounts()  │                  │         │                │
-│  sdk.signMessage()   │                  │  existing handlers       │
-│                      │                  │  (auth, keystore, sign)  │
-└──────────────────────┘                  └──────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph dApp["Test dApp (browser tab)"]
+        SDK["@canton-network/dapp-sdk\n\nDappProvider uses\nWindowTransport\n(window.postMessage)\n\nsdk.connect()\nsdk.listAccounts()\nsdk.signMessage()"]
+    end
+    subgraph Ext["Canton Wallet Extension"]
+        CS["content-script.ts\n(listens window msgs,\nrelays to background)"]
+        BG["background.ts\n(CIP-0103 RPC handler)"]
+        Handlers["existing handlers\n(auth, keystore, sign)"]
+        CS -->|"chrome.runtime.sendMsg"| BG
+        BG --> Handlers
+    end
+    SDK <-->|"postMessage"| CS
 ```
 
 ### Discovery Flow (how dApp finds the extension)
@@ -302,12 +299,16 @@ API endpoints called: `/auth/*`, `/wallet/*`, `/transfer-token-standard/*`, `/ex
 
 **3. Two independent communication channels**:
 
-```text
-EXISTING (unchanged):
-  Popup → chrome.runtime.sendMessage({action, payload}) → background → dapp-core API
-
-NEW (additive):
-  Web page → window.postMessage(SpliceMessage) → content script → chrome.runtime.sendMessage(SpliceMessage) → background → response
+```mermaid
+flowchart LR
+    subgraph existing["EXISTING (unchanged)"]
+        direction LR
+        P["Popup"] -->|"chrome.runtime.sendMessage\n({action, payload})"| B1["background"] --> API["dapp-core API"]
+    end
+    subgraph new["NEW (additive)"]
+        direction LR
+        WP["Web page"] -->|"window.postMessage\n(SpliceMessage)"| CS["content script"] -->|"chrome.runtime.sendMessage\n(SpliceMessage)"| B2["background"] --> R["response"]
+    end
 ```
 
 **4. Background handler coexistence**: The `chrome.runtime.onMessage` API supports multiple listeners. The new CIP-0103 listener checks `isSpliceMessage(message)` first — if the message isn't a SpliceMessage, it returns early and the existing handler processes it normally.
@@ -632,11 +633,24 @@ Each driver exposes 8 methods: `signTransaction`, `getTransaction`, `getTransact
 
 ### Transaction Signing Flow by Provider
 
-```text
-PARTICIPANT:      returns signature='none' → participant signs at submission time
-WALLET_KERNEL:    signTransactionHash(hash, privateKey) → immediate signature
-FIREBLOCKS:       POST to Fireblocks API → poll getTransaction() up to 60s → signature
-BLOCKDAEMON:      POST to Blockdaemon API → poll getTransaction() up to 60s → signature
+```mermaid
+flowchart LR
+    subgraph PARTICIPANT
+        direction LR
+        P1["signature='none'"] --> P2["participant signs\nat submission time"]
+    end
+    subgraph WALLET_KERNEL
+        direction LR
+        W1["signTransactionHash\n(hash, privateKey)"] --> W2["immediate signature"]
+    end
+    subgraph FIREBLOCKS
+        direction LR
+        F1["POST to\nFireblocks API"] --> F2["poll getTransaction()\nup to 60s"] --> F3["signature"]
+    end
+    subgraph BLOCKDAEMON
+        direction LR
+        BD1["POST to\nBlockdaemon API"] --> BD2["poll getTransaction()\nup to 60s"] --> BD3["signature"]
+    end
 ```
 
 ### How Canton Wallet Extension Relates to Signing Providers
@@ -687,46 +701,25 @@ We create a **standalone signing relay service** that implements these exact HTT
 
 ### Architecture
 
-```text
-┌─────────────────────────┐
-│  canton-wallet extension │
-│  (keys in IndexedDB)     │
-└────────┬────────────────┘
-         │ Socket.io (persistent connection)
-         │
-┌────────▼──────────────────────────────────────────┐
-│  signing-relay (standalone Express + Socket.io)    │
-│  Location: canton-wallet/tools/signing-relay/      │
-│                                                    │
-│  HTTP API (Blockdaemon-compatible):                │
-│    POST /createKey         → ask extension for key │
-│    POST /signTransaction   → relay to extension    │
-│    POST /getTransaction    → return stored sig     │
-│    POST /getKeys           → return extension keys │
-│    POST /getTransactions   → bulk query            │
-│                                                    │
-│  WebSocket server:                                 │
-│    Extension connects, registers keys, receives    │
-│    signing requests, sends back signatures         │
-│                                                    │
-│  In-memory store:                                  │
-│    Registered keys, pending signing requests,      │
-│    completed signatures                            │
-└────────┬──────────────────────────────────────────┘
-         │ HTTP (Gateway calls these endpoints)
-         │
-┌────────▼───────────────┐
-│  Wallet Gateway         │
-│  BLOCKDAEMON_API_URL=   │
-│  http://localhost:4100   │
-│                         │
-│  → wallet appears in UI │
-│  → signs via relay      │
-└────────┬───────────────┘
-         │
-┌────────▼───────────────┐
-│  Canton Network         │
-└────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph ExtBlock["canton-wallet extension"]
+        EXT["keys in IndexedDB"]
+    end
+    subgraph RelayBlock["signing-relay (standalone Express + Socket.io)\nLocation: canton-wallet/tools/signing-relay/"]
+        direction TB
+        HTTP["HTTP API (Blockdaemon-compatible)\nPOST /createKey - ask extension for key\nPOST /signTransaction - relay to extension\nPOST /getTransaction - return stored sig\nPOST /getKeys - return extension keys\nPOST /getTransactions - bulk query"]
+        WS["WebSocket server\nExtension connects, registers keys,\nreceives signing requests,\nsends back signatures"]
+        Store["In-memory store\nRegistered keys, pending signing\nrequests, completed signatures"]
+    end
+    subgraph GWBlock["Wallet Gateway"]
+        GW["BLOCKDAEMON_API_URL=\nhttp://localhost:4100\n\nwallet appears in UI\nsigns via relay"]
+    end
+    CN["Canton Network"]
+
+    ExtBlock <-->|"Socket.io\n(persistent connection)"| RelayBlock
+    RelayBlock <-->|"HTTP\n(Gateway calls these endpoints)"| GWBlock
+    GWBlock --> CN
 ```
 
 ### Wallet Creation Flow (extension wallet appears in Gateway UI)

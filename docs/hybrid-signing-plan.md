@@ -13,25 +13,28 @@ The canton-wallet browser extension manages keys locally (IndexedDB, AES-encrypt
 
 ### Approach A: Signing Relay (production)
 
-```
-dApp → SDK → Gateway → Relay (Socket.io) → Extension
+```mermaid
+flowchart LR
+    dApp --> SDK --> Gateway --> Relay["Relay (Socket.io)"] --> Extension
 ```
 
 Gateway delegates signing to extension via a relay service. Already designed in `dapp-connectivity-plan.md`. Best for production but requires extra infrastructure (relay service).
 
 ### Approach B: dApp-Orchestrated Hybrid (prototyping — recommended to start)
 
-```
-dApp → SDK → Gateway     (for prepare/execute via ledgerApi)
-dApp → postMessage → Extension  (for signing)
+```mermaid
+flowchart LR
+    dApp1["dApp"] -->|"SDK"| Gateway["Gateway\n(prepare/execute via ledgerApi)"]
+    dApp2["dApp"] -->|"postMessage"| Extension["Extension\n(for signing)"]
 ```
 
 dApp connects to Gateway for ledger access, talks to extension directly for signing. Orchestrates the prepare → sign → execute flow itself.
 
 ### Approach C: Extension as Gateway Proxy
 
-```
-dApp → SDK → Extension → HTTP → Gateway  (extension proxies ledger calls)
+```mermaid
+flowchart LR
+    dApp --> SDK --> Extension -->|"HTTP"| Gateway["Gateway\n(extension proxies ledger calls)"]
 ```
 
 Extension implements `ledgerApi`/`prepareExecute` by proxying to Gateway internally. Most complex.
@@ -46,7 +49,7 @@ Approach B is simplest to prototype (2 small changes). Once validated, Approach 
 
 ### How It Works
 
-```
+```text
 1. dApp connects to Gateway via SDK Discovery ("Remote")
    → Gets sdk.ledgerApi() access + session (userId: "ledger-api-user")
 
@@ -65,6 +68,7 @@ Approach B is simplest to prototype (2 small changes). Once validated, Approach 
 ### Prerequisites
 
 The extension's party (`dapp-user::1220...`) must be onboarded via dapp-core so that:
+
 - `ledger-api-user` has `CanActAs` rights for that party
 - The party is registered in the Canton participant
 
@@ -102,6 +106,7 @@ async function handleSignTransaction(params: unknown): Promise<{
 ```
 
 Register in methods map:
+
 ```typescript
 signTransaction: handleSignTransaction,  // replace notImplemented stub
 ```
@@ -179,30 +184,26 @@ UI: Add "Hybrid Ping" button in Ledger Submit tab that only enables when both Ga
 
 ### Data Flow Diagram
 
-```
-canton-test-dapp                 Gateway                  Extension
-     │                              │                        │
-     │  sdk.ledgerApi(POST,prepare) │                        │
-     │─────────────────────────────>│                        │
-     │                              │──> Canton Ledger       │
-     │                              │<── { hash, tx }        │
-     │<─────────────────────────────│                        │
-     │  { preparedTransactionHash,  │                        │
-     │    preparedTransaction }     │                        │
-     │                              │                        │
-     │  postMessage(signTransaction)│                        │
-     │───────────────────────────────────────────────────────>│
-     │                              │          sign(hash, pk)│
-     │<───────────────────────────────────────────────────────│
-     │  { signature, publicKey,     │                        │
-     │    fingerprint }             │                        │
-     │                              │                        │
-     │  sdk.ledgerApi(POST,execute) │                        │
-     │─────────────────────────────>│                        │
-     │                              │──> Canton Ledger       │
-     │                              │<── success             │
-     │<─────────────────────────────│                        │
-     │  done                        │                        │
+```mermaid
+sequenceDiagram
+    participant D as canton-test-dapp
+    participant G as Gateway
+    participant CL as Canton Ledger
+    participant E as Extension
+
+    D->>G: sdk.ledgerApi(POST, prepare)
+    G->>CL: prepare request
+    CL-->>G: { hash, tx }
+    G-->>D: { preparedTransactionHash, preparedTransaction }
+
+    D->>E: postMessage(signTransaction)
+    Note over E: sign(hash, pk)
+    E-->>D: { signature, publicKey, fingerprint }
+
+    D->>G: sdk.ledgerApi(POST, execute)
+    G->>CL: execute request
+    CL-->>G: success
+    G-->>D: done
 ```
 
 ### Signature Format Details
@@ -255,6 +256,7 @@ The prepare/execute calls use `userId` from the Gateway session (`ledger-api-use
 ### Migration to Approach A (Production)
 
 Once Approach B validates the concept, migrate to the Signing Relay:
+
 1. Build relay service (`canton-wallet/tools/signing-relay/`)
 2. Extension connects to relay via Socket.io (registers keys)
 3. Gateway configured with `BLOCKDAEMON_API_URL=http://localhost:4100`

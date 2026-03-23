@@ -16,16 +16,12 @@ Local clone: `/Users/lehoanganh/Working/FETCH/Angelhack/Canton/splice-wallet-ker
 
 ### Architecture
 
-```
-┌─────────────┐    dApp API (CIP-103)    ┌──────────────────┐    Ledger API     ┌──────────────────┐
-│   Your dApp │ ◄──────────────────────► │  Wallet Gateway  │ ◄───────────────► │ Canton Validator │
-│ (dApp SDK)  │   (HTTP / postMessage)   │   (Express.js)   │                   │                  │
-└─────────────┘                          │  ┌────────────┐  │   Signing         └──────────────────┘
-                                         │  │  User API  │  │   ┌──────────────────┐
-                                         │  │  User UI   │  │ ◄►│ Signing Provider │
-                                         │  └────────────┘  │   │ (Participant,    │
-                                         └──────────────────┘   │  Fireblocks, …)  │
-                                                                └──────────────────┘
+```mermaid
+flowchart LR
+    dApp["Your dApp\n(dApp SDK)"] <-->|"dApp API (CIP-103)\nHTTP / postMessage"| GW["Wallet Gateway\n(Express.js)"]
+    GW <-->|"Ledger API"| CV["Canton Validator"]
+    GW --- UserAPI["User API\nUser UI"]
+    GW <-->|"Signing"| SP["Signing Provider\n(Participant,\nFireblocks, ...)"]
 ```
 
 ### Key Packages
@@ -121,26 +117,30 @@ Single JSON config file — example for localnet:
 Deploy the Wallet Gateway alongside our NestJS backend. Our backend delegates all Canton ledger interactions to the Gateway's User API.
 
 **Architecture:**
-```
-Extension / Frontend
-  │
-  ├─ Business logic ──► Our NestJS Backend ──► Wallet Gateway ──► Canton Participant
-  │                     (swap, offers, etc.)   (ledger, signing)
-  │
-  └─ (future) dApp API ──► Wallet Gateway directly
+
+```mermaid
+flowchart LR
+    EF["Extension / Frontend"]
+    EF -->|"Business logic"| NestJS["Our NestJS Backend\n(swap, offers, etc.)"]
+    NestJS --> WG["Wallet Gateway\n(ledger, signing)"]
+    WG --> CP["Canton Participant"]
+    EF -.->|"(future) dApp API"| WG
 ```
 
 **Changes:**
+
 - Replace `CantonClientService` calls with HTTP calls to Gateway's User API
 - Configure Gateway with same network/auth as our `.env`
 - Run both services (our backend + Gateway)
 
 **Pros:**
+
 - Clean separation of concerns
 - Get all Gateway features (multi-network, pluggable signing) for free
 - Future-proof: can expose dApp API (CIP-103) for third-party dApps
 
 **Cons:**
+
 - Two services to deploy and maintain
 - Extra network hop for Canton operations
 - Need to sync auth state between the two services
@@ -150,18 +150,21 @@ Extension / Frontend
 Use `@canton-network/wallet-sdk` as a library inside our NestJS backend. Replace our hand-rolled Canton code with SDK controllers.
 
 **Changes:**
+
 - `yarn add @canton-network/wallet-sdk` in backend (Node.js — no polyfill issues)
 - Replace `CantonClientService` + `TopologyService` with `LedgerController` + `TokenStandardController`
 - Get `createTap()` for DevNet faucet for free
 - Keep all business logic (swap, offers, balances) unchanged
 
 **Pros:**
+
 - Minimal architectural change — swap out the Canton layer, keep everything above it
 - Single service deployment
 - wallet-sdk is designed for exactly this use case
 - No polyfill/stub issues (Node.js native)
 
 **Cons:**
+
 - Still maintaining our own auth, signing flow, and network config
 - Don't get Gateway's pluggable signing drivers or multi-network config
 - Must track wallet-sdk version updates manually
@@ -171,22 +174,24 @@ Use `@canton-network/wallet-sdk` as a library inside our NestJS backend. Replace
 Use the Wallet Gateway as the primary Canton backend. Add our business logic as a separate NestJS service or Express middleware on top.
 
 **Architecture:**
-```
-Extension / Frontend
-  │
-  ├─ Canton ops ──────► Wallet Gateway (dApp API / User API)
-  │                     └── Canton Participant
-  │
-  └─ Business logic ──► Our Business API (NestJS)
-                        └── Database (swap, offers, history)
+
+```mermaid
+flowchart LR
+    EF["Extension / Frontend"]
+    EF -->|"Canton ops"| WG["Wallet Gateway\n(dApp API / User API)"]
+    WG --> CP["Canton Participant"]
+    EF -->|"Business logic"| BA["Our Business API\n(NestJS)"]
+    BA --> DB["Database\n(swap, offers, history)"]
 ```
 
 **Changes:**
+
 - Extension uses `@canton-network/dapp-sdk` for standard Canton operations
 - Our backend becomes a pure business logic service (no Canton calls)
 - Wallet Gateway handles auth, signing, network management
 
 **Pros:**
+
 - Most "correct" architecture long-term
 - Clean separation: Canton plumbing vs. business logic
 - Get CIP-103 dApp API standard for free
@@ -194,6 +199,7 @@ Extension / Frontend
 - Multi-network runtime switching
 
 **Cons:**
+
 - Significant restructuring
 - Two services + database migration
 - Extension needs to talk to two backends
