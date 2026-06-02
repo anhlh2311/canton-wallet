@@ -8,8 +8,7 @@ import type {
   PrepareData,
 } from '@lib/messaging';
 import type {
-  PrepareTransferProps,
-  PrepareTransferTokenStandardProps,
+  PrepareTransferOfferProps,
   GetIncomingRequestsQuery,
   GetHistoryRequestsQuery,
 } from '@lib/types';
@@ -33,26 +32,12 @@ export async function handleFetchBalances(): Promise<
   }
 }
 
-export async function handlePrepareTransferPreapproval(
-  payload: PrepareTransferProps,
+export async function handlePrepareTransferOffer(
+  payload: PrepareTransferOfferProps,
 ): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/external-party/transfer-amulet/prepare',
-      payload,
-    );
-    return ok({ preparedData: data.data });
-  } catch (e: unknown) {
-    return err(e instanceof Error ? e.message : 'Prepare transfer failed');
-  }
-}
-
-export async function handlePrepareTransferTokenStandard(
-  payload: PrepareTransferTokenStandardProps,
-): Promise<MessageResponse<PrepareData>> {
-  try {
-    const { data } = await apiClient.post(
-      '/offers/prepare',
+      '/transfer-offer/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -66,7 +51,7 @@ export async function handleFetchIncomingOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/offers/incoming-requests',
+      '/transfer-offer/incoming-requests',
       { params: payload },
     );
     const result = data.data;
@@ -88,7 +73,7 @@ export async function handleFetchOutgoingOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/offers/outgoing-requests',
+      '/transfer-offer/outgoing-requests',
       { params: payload },
     );
     const result = data.data;
@@ -110,7 +95,7 @@ export async function handleFetchHistoryOffers(
 ): Promise<MessageResponse<PaginatedOffersData>> {
   try {
     const { data } = await apiClient.get(
-      '/offers/history',
+      '/transfer-offer/history',
       { params: payload },
     );
     const result = data.data;
@@ -133,7 +118,7 @@ export async function handlePrepareApprove(payload: {
 }): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/offers/approve/prepare',
+      '/transfer-offer/approve/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -148,7 +133,7 @@ export async function handlePrepareReject(payload: {
 }): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/offers/reject/prepare',
+      '/transfer-offer/reject/prepare',
       payload,
     );
     return ok({ preparedData: data.data });
@@ -176,7 +161,6 @@ export async function handleRequestFaucet(
     const partyId = await sessionStore.get('partyId');
     if (!partyId) return err('No party ID');
 
-    // Use cached private key (preferred) or decrypt from keystore
     let privateKey = getCachedPrivateKey();
     if (!privateKey) {
       const keystore = await localStore.get('keystore');
@@ -186,7 +170,6 @@ export async function handleRequestFaucet(
       privateKey = await provider.decryptKey(keystore, password);
     }
 
-    // Step 1: Call dapp-core to prepare the DevNet Tap
     const { data: prepareRes } = await apiClient.post(
       '/external-party/devnet-tap/prepare',
       { partyId, amount },
@@ -196,11 +179,9 @@ export async function handleRequestFaucet(
       return err('Faucet prepare returned no transaction hash');
     }
 
-    // Step 2: Sign locally
     const signature = signTransactionHash(prepared.preparedTransactionHash, privateKey);
     const publicKey = getPublicKeyFromPrivate(privateKey);
 
-    // Step 3: Submit signed transaction to dapp-core
     await apiClient.post('/external-party/devnet-tap/submit', {
       preparedTransaction: prepared.preparedTransaction,
       preparedTransactionHash: prepared.preparedTransactionHash,
@@ -221,7 +202,7 @@ export async function handlePrepareWithdraw(payload: {
 }): Promise<MessageResponse<PrepareData>> {
   try {
     const { data } = await apiClient.post(
-      '/offers/withdraw/prepare',
+      '/transfer-offer/withdraw/prepare',
       payload,
     );
     return ok({ preparedData: data.data });

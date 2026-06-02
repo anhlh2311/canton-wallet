@@ -2,18 +2,13 @@ import { useState } from 'react';
 import { Loader2Icon, CheckCircleIcon, AlertTriangleIcon } from 'lucide-react';
 import { SUPPORTED_TOKENS } from '@lib/constants';
 import {
-  usePrepareTransferPreapproval,
-  useSignAndSubmitTransferPreapproval,
-  usePrepareTransferTokenStandard,
-  useSignAndSubmitTransferTokenStandard,
+  usePrepareTransferOffer,
+  useSignAndSubmitTransferOffer,
 } from '../../hooks/useTransfer';
 import { useBalances } from '../../hooks/useBalances';
 import { sendMessage, MSG } from '@lib/messaging';
 import type { AuthStateData } from '@lib/messaging';
-import type {
-  PrepareTransferResponse,
-  PrepareTransferTokenStandardResponse,
-} from '@lib/types';
+import type { PrepareTransferOfferResponse } from '@lib/types';
 import BigNumber from 'bignumber.js';
 
 export function Transfer() {
@@ -23,20 +18,15 @@ export function Transfer() {
   const [password, setPassword] = useState('');
   const [step, setStep] = useState<'form' | 'confirm' | 'success'>('form');
   const [error, setError] = useState('');
-  const [preparedData, setPreparedData] = useState<
-    PrepareTransferResponse | PrepareTransferTokenStandardResponse | null
-  >(null);
+  const [preparedData, setPreparedData] = useState<PrepareTransferOfferResponse | null>(null);
 
-  const prepareAmulet = usePrepareTransferPreapproval();
-  const submitAmulet = useSignAndSubmitTransferPreapproval();
-  const prepareStandard = usePrepareTransferTokenStandard();
-  const submitStandard = useSignAndSubmitTransferTokenStandard();
+  const prepare = usePrepareTransferOffer();
+  const submit = useSignAndSubmitTransferOffer();
 
   const { data: balancesData } = useBalances();
 
-  const isAmulet = tokenId === 'Amulet';
-  const isPreparing = prepareAmulet.isPending || prepareStandard.isPending;
-  const isSubmitting = submitAmulet.isPending || submitStandard.isPending;
+  const isPreparing = prepare.isPending;
+  const isSubmitting = submit.isPending;
   const token = SUPPORTED_TOKENS.find((t) => t.id === tokenId);
 
   const selectedBalance = balancesData?.balances?.find(
@@ -48,29 +38,15 @@ export function Transfer() {
   const handlePrepare = async () => {
     setError('');
     try {
-      const authState = await sendMessage<AuthStateData>({ action: MSG.GET_AUTH_STATE });
-      const partyId = authState.partyId;
-      if (!partyId) throw new Error('No party ID');
+      const result = await prepare.mutateAsync({
+        assetId: tokenId,
+        assetAmount: amount,
+        receiverPartyId: recipient,
+        reason: 'Transfer from Canton Wallet',
+        maxTimeToExecute: 86400000,
+      });
 
-      let result;
-      if (isAmulet) {
-        result = await prepareAmulet.mutateAsync({
-          senderPartyId: partyId,
-          receiverPartyId: recipient,
-          amount,
-          reason: 'Transfer from Canton Wallet',
-        });
-      } else {
-        result = await prepareStandard.mutateAsync({
-          assetId: tokenId,
-          assetAmount: amount,
-          receiverPartyId: recipient,
-          reason: 'Transfer from Canton Wallet',
-          maxTimeToExecute: 24,
-        });
-      }
-
-      setPreparedData(result.preparedData as PrepareTransferResponse | PrepareTransferTokenStandardResponse);
+      setPreparedData(result.preparedData as PrepareTransferOfferResponse);
       setStep('confirm');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Prepare failed');
@@ -81,17 +57,10 @@ export function Transfer() {
     if (!preparedData || !password) return;
     setError('');
     try {
-      if (isAmulet) {
-        await submitAmulet.mutateAsync({
-          password,
-          preparedData: preparedData as PrepareTransferResponse,
-        });
-      } else {
-        await submitStandard.mutateAsync({
-          password,
-          preparedData: preparedData as PrepareTransferTokenStandardResponse,
-        });
-      }
+      await submit.mutateAsync({
+        password,
+        preparedData,
+      });
       setStep('success');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Transfer failed');

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Loader2Icon, LockIcon, AlertCircleIcon, XCircleIcon } from 'lucide-react';
 import { useOutgoingOffers, usePrepareWithdraw, useSignAndSubmitWithdraw } from '../../../hooks/useOffers';
 import { format } from '@lib/format';
-import type { PrepareTransferTokenStandardResponse } from '@lib/types';
+import type { PrepareTransferOfferResponse } from '@lib/types';
 import BigNumber from 'bignumber.js';
 
 export function OutgoingTab() {
@@ -14,7 +14,7 @@ export function OutgoingTab() {
 
   const [activeContract, setActiveContract] = useState<string | null>(null);
   const [password, setPassword] = useState('');
-  const [preparedData, setPreparedData] = useState<PrepareTransferTokenStandardResponse | null>(null);
+  const [preparedData, setPreparedData] = useState<PrepareTransferOfferResponse | null>(null);
   const [withdrawError, setWithdrawError] = useState('');
 
   const handlePrepareWithdraw = async (contractId: string, tokenId: string) => {
@@ -22,7 +22,7 @@ export function OutgoingTab() {
     setActiveContract(contractId);
     try {
       const result = await prepareWithdraw.mutateAsync({ contractId, tokenId });
-      setPreparedData(result.preparedData as PrepareTransferTokenStandardResponse);
+      setPreparedData(result.preparedData as PrepareTransferOfferResponse);
     } catch (e: unknown) {
       setWithdrawError(e instanceof Error ? e.message : 'Prepare withdraw failed');
       setActiveContract(null);

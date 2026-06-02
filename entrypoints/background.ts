@@ -29,16 +29,14 @@ import {
   handleGetPreapprovalStatus,
 } from './background/handlers/keystore.handler';
 import {
-  handleSignAndSubmitTransferPreapproval,
-  handleSignAndSubmitTransferTokenStandard,
+  handleSignAndSubmitTransferOffer,
   handleSignAndSubmitApprove,
   handleSignAndSubmitReject,
   handleSignAndSubmitWithdraw,
 } from './background/handlers/signing.handler';
 import {
   handleFetchBalances,
-  handlePrepareTransferPreapproval,
-  handlePrepareTransferTokenStandard,
+  handlePrepareTransferOffer,
   handleFetchIncomingOffers,
   handleFetchOutgoingOffers,
   handleFetchHistoryOffers,
@@ -180,10 +178,8 @@ async function routeMessage(message: MessageRequest) {
       return handleGetPreapprovalStatus();
 
     // Signing
-    case MSG.SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL:
-      return handleSignAndSubmitTransferPreapproval(message.payload);
-    case MSG.SIGN_AND_SUBMIT_TRANSFER_TOKEN_STANDARD:
-      return handleSignAndSubmitTransferTokenStandard(message.payload);
+    case MSG.SIGN_AND_SUBMIT_TRANSFER_OFFER:
+      return handleSignAndSubmitTransferOffer(message.payload);
     case MSG.SIGN_AND_SUBMIT_APPROVE:
       return handleSignAndSubmitApprove(message.payload);
     case MSG.SIGN_AND_SUBMIT_REJECT:
@@ -194,10 +190,8 @@ async function routeMessage(message: MessageRequest) {
     // API proxy
     case MSG.FETCH_BALANCES:
       return handleFetchBalances();
-    case MSG.PREPARE_TRANSFER_PREAPPROVAL:
-      return handlePrepareTransferPreapproval(message.payload);
-    case MSG.PREPARE_TRANSFER_TOKEN_STANDARD:
-      return handlePrepareTransferTokenStandard(message.payload);
+    case MSG.PREPARE_TRANSFER_OFFER:
+      return handlePrepareTransferOffer(message.payload);
     case MSG.FETCH_INCOMING_OFFERS:
       return handleFetchIncomingOffers(message.payload);
     case MSG.FETCH_OUTGOING_OFFERS:
