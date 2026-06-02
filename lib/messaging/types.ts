@@ -7,8 +7,10 @@ import type {
   GetApproveRequestsResponse,
   GetHistoryRequestsQuery,
   GetIncomingRequestsQuery,
-  PrepareTransferOfferProps,
-  PrepareTransferOfferResponse,
+  PrepareTransferProps,
+  PrepareTransferResponse,
+  PrepareTransferTokenStandardProps,
+  PrepareTransferTokenStandardResponse,
   User,
 } from '../types';
 
@@ -56,17 +58,24 @@ export type MessageRequest =
   | { action: typeof MSG.GET_PREAPPROVAL_STATUS }
   // Signing
   | {
-      action: typeof MSG.SIGN_AND_SUBMIT_TRANSFER_OFFER;
+      action: typeof MSG.SIGN_AND_SUBMIT_TRANSFER_PREAPPROVAL;
       payload: {
         password: string;
-        preparedData: PrepareTransferOfferResponse;
+        preparedData: PrepareTransferResponse;
+      };
+    }
+  | {
+      action: typeof MSG.SIGN_AND_SUBMIT_TRANSFER_TOKEN_STANDARD;
+      payload: {
+        password: string;
+        preparedData: PrepareTransferTokenStandardResponse;
       };
     }
   | {
       action: typeof MSG.SIGN_AND_SUBMIT_APPROVE;
       payload: {
         password: string;
-        preparedData: PrepareTransferOfferResponse;
+        preparedData: PrepareTransferTokenStandardResponse;
         contractId?: string;
       };
     }
@@ -74,7 +83,7 @@ export type MessageRequest =
       action: typeof MSG.SIGN_AND_SUBMIT_REJECT;
       payload: {
         password: string;
-        preparedData: PrepareTransferOfferResponse;
+        preparedData: PrepareTransferTokenStandardResponse;
         contractId?: string;
       };
     }
@@ -82,15 +91,19 @@ export type MessageRequest =
       action: typeof MSG.SIGN_AND_SUBMIT_WITHDRAW;
       payload: {
         password: string;
-        preparedData: PrepareTransferOfferResponse;
+        preparedData: PrepareTransferTokenStandardResponse;
         contractId?: string;
       };
     }
   // API proxy
   | { action: typeof MSG.FETCH_BALANCES }
   | {
-      action: typeof MSG.PREPARE_TRANSFER_OFFER;
-      payload: PrepareTransferOfferProps;
+      action: typeof MSG.PREPARE_TRANSFER_PREAPPROVAL;
+      payload: PrepareTransferProps;
+    }
+  | {
+      action: typeof MSG.PREPARE_TRANSFER_TOKEN_STANDARD;
+      payload: PrepareTransferTokenStandardProps;
     }
   | {
       action: typeof MSG.FETCH_INCOMING_OFFERS;
@@ -178,7 +191,7 @@ export interface AboutMeData {
 }
 
 export interface PrepareData {
-  preparedData: PrepareTransferOfferResponse | AutoApprovalPrepareResponse;
+  preparedData: PrepareTransferResponse | PrepareTransferTokenStandardResponse | AutoApprovalPrepareResponse;
 }
 
 export interface PreapprovalStatusData {

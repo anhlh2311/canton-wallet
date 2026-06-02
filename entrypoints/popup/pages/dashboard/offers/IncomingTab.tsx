@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Loader2Icon, CheckIcon, XIcon } from 'lucide-react';
 import { useIncomingOffers, usePrepareApprove, usePrepareReject, useSignAndSubmitApprove, useSignAndSubmitReject } from '../../../hooks/useOffers';
 import { format } from '@lib/format';
-import type { PrepareTransferOfferResponse } from '@lib/types';
+import type { PrepareTransferTokenStandardResponse } from '@lib/types';
 import BigNumber from 'bignumber.js';
 
 function isExpired(executeBefore?: string): boolean {
@@ -22,7 +22,7 @@ export function IncomingTab() {
   const [activeContract, setActiveContract] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | null>(null);
-  const [preparedData, setPreparedData] = useState<PrepareTransferOfferResponse | null>(null);
+  const [preparedData, setPreparedData] = useState<PrepareTransferTokenStandardResponse | null>(null);
   const [error, setError] = useState('');
 
   const handlePrepare = async (contractId: string, tokenId: string, action: 'approve' | 'reject') => {
@@ -32,7 +32,7 @@ export function IncomingTab() {
     try {
       const fn = action === 'approve' ? prepareApprove : prepareReject;
       const result = await fn.mutateAsync({ contractId, tokenId });
-      setPreparedData(result.preparedData as PrepareTransferOfferResponse);
+      setPreparedData(result.preparedData as PrepareTransferTokenStandardResponse);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Prepare failed');
       setActiveContract(null);

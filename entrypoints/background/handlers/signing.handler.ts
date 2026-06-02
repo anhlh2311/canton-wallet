@@ -1,7 +1,10 @@
 import { signTransactionHash, getPublicKeyFromPrivate } from '@canton-network/core-signing-lib';
 import { ok, err } from '@lib/messaging';
 import type { MessageResponse } from '@lib/messaging';
-import type { PrepareTransferOfferResponse } from '@lib/types';
+import type {
+  PrepareTransferResponse,
+  PrepareTransferTokenStandardResponse,
+} from '@lib/types';
 import { localStore, sessionStore } from '@lib/storage';
 import { getEncryptionProvider } from '../encryption';
 import apiClient from '../api-client';
@@ -31,12 +34,14 @@ async function verifyCurrentParty(expectedPartyId?: string): Promise<string> {
  * Fingerprint = hex(0x1220 || SHA256(int32_be(12) || raw_pubkey_bytes))
  */
 async function verifyKeyFingerprint(publicKeyBase64: string, partyId: string): Promise<void> {
+  // Decode base64 public key to raw bytes
   const raw = atob(publicKeyBase64);
   const pubKeyBytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) {
     pubKeyBytes[i] = raw.charCodeAt(i);
   }
 
+  // Prepend int32_be(12) = [0x00, 0x00, 0x00, 0x0c]
   const prefixed = new Uint8Array(4 + pubKeyBytes.length);
   prefixed[0] = 0x00;
   prefixed[1] = 0x00;
@@ -44,8 +49,10 @@ async function verifyKeyFingerprint(publicKeyBase64: string, partyId: string): P
   prefixed[3] = 0x0c;
   prefixed.set(pubKeyBytes, 4);
 
+  // SHA-256 hash
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', prefixed));
 
+  // Prepend 0x1220 and hex-encode
   const fingerprint =
     '1220' +
     Array.from(digest)
@@ -60,6 +67,10 @@ async function verifyKeyFingerprint(publicKeyBase64: string, partyId: string): P
   }
 }
 
+/**
+ * Decrypt the private key, derive public key, verify fingerprint, and sign the hash.
+ * Returns { signature, publicKey } for inclusion in submit requests.
+ */
 async function signAndVerify(
   password: string,
   partyId: string,
@@ -72,9 +83,38 @@ async function signAndVerify(
   return { signature, publicKey };
 }
 
-export async function handleSignAndSubmitTransferOffer(payload: {
+export async function handleSignAndSubmitTransferPreapproval(payload: {
   password: string;
-  preparedData: PrepareTransferOfferResponse;
+  preparedData: PrepareTransferResponse;
+}): Promise<MessageResponse<{ success: boolean }>> {
+  try {
+    const { password, preparedData } = payload;
+    const partyId = await verifyCurrentParty(preparedData.senderPartyId);
+    const { signature, publicKey } = await signAndVerify(
+      password, partyId, preparedData.preparedTransactionHash,
+    );
+
+    await apiClient.post('/external-party/transfer-amulet/submit', {
+      preparedTransaction: preparedData.preparedTransaction,
+      preparedTransactionHash: preparedData.preparedTransactionHash,
+      hashingSchemeVersion: preparedData.hashingSchemeVersion,
+      signature,
+      publicKey,
+      senderPartyId: preparedData.senderPartyId,
+      receiverPartyId: preparedData.receiverPartyId,
+      amount: preparedData.amount,
+    });
+
+    resetAutoLockTimer();
+    return ok({ success: true });
+  } catch (e: unknown) {
+    return err(e instanceof Error ? e.message : 'Transfer failed');
+  }
+}
+
+export async function handleSignAndSubmitTransferTokenStandard(payload: {
+  password: string;
+  preparedData: PrepareTransferTokenStandardResponse;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
     const { password, preparedData } = payload;
@@ -83,10 +123,9 @@ export async function handleSignAndSubmitTransferOffer(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/transfer-offer/submit', {
+    await apiClient.post('/offers/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
-      hashingSchemeVersion: preparedData.hashingSchemeVersion,
       signature,
       publicKey,
     });
@@ -100,7 +139,7 @@ export async function handleSignAndSubmitTransferOffer(payload: {
 
 export async function handleSignAndSubmitApprove(payload: {
   password: string;
-  preparedData: PrepareTransferOfferResponse;
+  preparedData: PrepareTransferTokenStandardResponse;
   contractId?: string;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
@@ -110,7 +149,7 @@ export async function handleSignAndSubmitApprove(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/transfer-offer/approve/submit', {
+    await apiClient.post('/offers/approve/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       signature,
@@ -127,7 +166,7 @@ export async function handleSignAndSubmitApprove(payload: {
 
 export async function handleSignAndSubmitReject(payload: {
   password: string;
-  preparedData: PrepareTransferOfferResponse;
+  preparedData: PrepareTransferTokenStandardResponse;
   contractId?: string;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
@@ -137,7 +176,7 @@ export async function handleSignAndSubmitReject(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/transfer-offer/reject/submit', {
+    await apiClient.post('/offers/reject/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       signature,
@@ -154,7 +193,7 @@ export async function handleSignAndSubmitReject(payload: {
 
 export async function handleSignAndSubmitWithdraw(payload: {
   password: string;
-  preparedData: PrepareTransferOfferResponse;
+  preparedData: PrepareTransferTokenStandardResponse;
   contractId?: string;
 }): Promise<MessageResponse<{ success: boolean }>> {
   try {
@@ -164,7 +203,7 @@ export async function handleSignAndSubmitWithdraw(payload: {
       password, partyId, preparedData.preparedTransactionHash,
     );
 
-    await apiClient.post('/transfer-offer/withdraw/submit', {
+    await apiClient.post('/offers/withdraw/submit', {
       preparedTransaction: preparedData.preparedTransaction,
       preparedTransactionHash: preparedData.preparedTransactionHash,
       signature,

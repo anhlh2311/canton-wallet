@@ -3,7 +3,7 @@ import type { PaginatedOffersData, PrepareData } from '@lib/messaging';
 import type {
   GetIncomingRequestsQuery,
   GetHistoryRequestsQuery,
-  PrepareTransferOfferResponse,
+  PrepareTransferTokenStandardResponse,
 } from '@lib/types';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKey } from '@lib/constants';
@@ -67,7 +67,7 @@ export function useSignAndSubmitApprove() {
   return useMutation({
     mutationFn: (payload: {
       password: string;
-      preparedData: PrepareTransferOfferResponse;
+      preparedData: PrepareTransferTokenStandardResponse;
       contractId?: string;
     }) =>
       sendMessage<{ success: boolean }>({
@@ -88,7 +88,7 @@ export function useSignAndSubmitReject() {
   return useMutation({
     mutationFn: (payload: {
       password: string;
-      preparedData: PrepareTransferOfferResponse;
+      preparedData: PrepareTransferTokenStandardResponse;
       contractId?: string;
     }) =>
       sendMessage<{ success: boolean }>({
@@ -119,7 +119,7 @@ export function useSignAndSubmitWithdraw() {
   return useMutation({
     mutationFn: (payload: {
       password: string;
-      preparedData: PrepareTransferOfferResponse;
+      preparedData: PrepareTransferTokenStandardResponse;
       contractId?: string;
     }) =>
       sendMessage<{ success: boolean }>({
